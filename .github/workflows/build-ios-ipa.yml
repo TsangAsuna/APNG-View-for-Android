@@ -1,0 +1,86 @@
+name: Build iOS IPA (TrollStore)
+
+# 触发条件：
+#   - 推送带有 ios 路径变更的 main 分支
+#   - 创建 v* 开头的 tag（自动构建并发布 .ipa）
+#   - 手动触发
+on:
+  push:
+    branches: [main, master]
+    paths: ['ios/**', 'lib/**', 'pubspec.yaml', '.github/workflows/build-ios-ipa.yml']
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    runs-on: macos-latest   # iOS 构建必须使用 macOS runner
+    concurrency:
+      group: ios-${{ github.ref }}
+      cancel-in-progress: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          channel: 'stable'
+          cache: true
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Run tests
+        run: flutter test
+
+      # 构建 Release（arm64 真机架构），不签名
+      # --no-codesign 产出未签名 .app，巨魔/越狱环境可安装
+      - name: Build iOS Release (unsigned)
+        run: |
+          flutter build ios --release --no-codesign \
+            --target-platform ios-arm64
+          echo "=== Build output ==="
+          find build/ios/iphoneos -maxdepth 2 -name "*.app" 2>/dev/null | head
+
+      # 将 .app 打包为 .ipa（Payload/xxx.app 结构）
+      - name: Package IPA
+        run: |
+          APP_PATH=$(find build/ios/iphoneos -name "*.app" -type d | head -1)
+          if [ -z "$APP_PATH" ]; then
+            echo "ERROR: .app not found"; exit 1
+          fi
+          echo "APP_PATH=$APP_PATH"
+          rm -rf Payload
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          zip -r -9 "APNGViewer-unsigned.ipa" Payload/
+          ls -la APNGViewer-unsigned.ipa
+
+      # 上传 .ipa 作为构建产物
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: apng-viewer-ios-ipa
+          path: APNGViewer-unsigned.ipa
+
+      # 推送 v tag 时创建 Release 附上 .ipa
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: APNG 阅览器 iOS ${{ github.ref_name }}
+          body: |
+            ## APNG 阅览器 iOS ${{ github.ref_name }}
+
+            - 未签名 .ipa，适用于 **TrollStore / 越狱环境**
+            - 支持 **iPad**（iPad Pro 2021 12.9 寸）全方向旋转与多任务缩放
+            - 支持从"文件"App 打开 APNG/PNG
+            - 部署目标 iOS 15.0+（iPadOS 15 及以上均可）
+          files: |
+            APNGViewer-unsigned.ipa

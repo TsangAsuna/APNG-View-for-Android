@@ -1,0 +1,438 @@
+import 'dart:async';
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'apng/apng_decoder.dart';
+import 'convert_page.dart';
+import 'viewer_page.dart';
+
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(const ApngViewerApp());
+}
+
+class ApngViewerApp extends StatefulWidget {
+  const ApngViewerApp({super.key});
+
+  @override
+  State<ApngViewerApp> createState() => _ApngViewerAppState();
+}
+
+class _ApngViewerAppState extends State<ApngViewerApp> {
+  ThemeMode _themeMode = ThemeMode.system;
+  static const _themeKey = 'theme_mode';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTheme();
+  }
+
+  Future<void> _loadTheme() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final stored = prefs.getString(_themeKey);
+      if (!mounted) return;
+      setState(() {
+        _themeMode = switch (stored) {
+          'dark' => ThemeMode.dark,
+          'light' => ThemeMode.light,
+          _ => ThemeMode.system,
+        };
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _setThemeMode(ThemeMode mode) async {
+    setState(() => _themeMode = mode);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_themeKey, mode.name);
+    } catch (_) {}
+  }
+
+  ThemeData _buildTheme(Brightness brightness) {
+    return ThemeData(
+      useMaterial3: true,
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: const Color(0xFF4FC3F7),
+        brightness: brightness,
+      ),
+      scaffoldBackgroundColor: brightness == Brightness.light
+          ? const Color(0xFFF5F7FA)
+          : const Color(0xFF121212),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'APNG 阅览器',
+      debugShowCheckedModeBanner: false,
+      theme: _buildTheme(Brightness.light),
+      darkTheme: _buildTheme(Brightness.dark),
+      themeMode: _themeMode,
+      home: HomePage(
+        themeMode: _themeMode,
+        onThemeModeChanged: _setThemeMode,
+      ),
+    );
+  }
+}
+
+class HomePage extends StatefulWidget {
+  final ThemeMode themeMode;
+  final ValueChanged<ThemeMode> onThemeModeChanged;
+
+  const HomePage({
+    super.key,
+    required this.themeMode,
+    required this.onThemeModeChanged,
+  });
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  final List<Map<String, String>> _recentFiles = [];
+  bool _loading = false;
+  MethodChannel? _fileChannel;
+  MethodChannel? _intentChannel;
+
+  static const _prefsKey = 'recent_apng_files';
+
+  @override
+  void initState() {
+    super.initState();
+    _fileChannel = const MethodChannel('com.apngviewer.apng_viewer/file');
+    _intentChannel =
+        const MethodChannel('com.apngviewer.apng_viewer/intent');
+    _loadPrefs();
+    _checkIntent();
+  }
+
+  /// 检查外部通过文件管理器打开 APNG
+  Future<void> _checkIntent() async {
+    try {
+      final path = await _intentChannel!.invokeMethod<String>('getPendingFile');
+      if (path != null && path.isNotEmpty && File(path).existsSync()) {
+        _openFile(path);
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  Future<void> _loadPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final recent = prefs.getStringList(_prefsKey) ?? [];
+    if (!mounted) return;
+    setState(() {
+      _recentFiles.clear();
+      for (final line in recent) {
+        final parts = line.split('|');
+        if (parts.length == 2) {
+          _recentFiles.add({'path': parts[0], 'name': parts[1]});
+        }
+      }
+    });
+  }
+
+  Future<void> _savePrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final lines =
+        _recentFiles.map((f) => '${f['path']}|${f['name']}').toList();
+    await prefs.setStringList(_prefsKey, lines);
+  }
+
+  Future<void> _pickAndOpen() async {
+    try {
+      final path =
+          await _fileChannel!.invokeMethod<String>('pickApngFile');
+      if (path != null && path.isNotEmpty && File(path).existsSync()) {
+        _openFile(path);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('无法打开文件选择器: $e')),
+      );
+    }
+  }
+
+  Future<void> _openFile(String path) async {
+    setState(() => _loading = true);
+    try {
+      final bytes = await File(path).readAsBytes();
+      final result = ApngDecoder.decode(bytes, filePath: path);
+      if (!mounted) return;
+      setState(() => _loading = false);
+      if (result == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('无法解码该文件，可能不是有效的 APNG/PNG 图片')),
+        );
+        return;
+      }
+
+      // 添加到最近记录
+      final fileName = path.split('/').last;
+      _recentFiles.removeWhere((f) => f['path'] == path);
+      _recentFiles.insert(0, {'path': path, 'name': fileName});
+      if (_recentFiles.length > 10) {
+        _recentFiles.removeRange(10, _recentFiles.length);
+      }
+      _savePrefs();
+
+      if (!mounted) return;
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ViewerPage(path: path, fileName: fileName),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('读取文件失败: $e')),
+      );
+    }
+  }
+
+  void _clearRecent() {
+    setState(() => _recentFiles.clear());
+    _savePrefs();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = widget.themeMode == ThemeMode.dark ||
+        (widget.themeMode == ThemeMode.system &&
+            MediaQuery.platformBrightnessOf(context) == Brightness.dark);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Row(
+          children: [
+            Icon(Icons.animation, color: Color(0xFF4FC3F7)),
+            SizedBox(width: 10),
+            Text('APNG 阅览器',
+                style: TextStyle(fontWeight: FontWeight.w600)),
+          ],
+        ),
+        actions: [
+          IconButton(
+            icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
+            tooltip: isDark ? '切换到浅色模式' : '切换到深色模式',
+            onPressed: () {
+              widget.onThemeModeChanged(
+                isDark ? ThemeMode.light : ThemeMode.dark,
+              );
+            },
+          ),
+        ],
+      ),
+      body: Stack(
+        children: [
+          Column(
+            children: [
+              _buildHeroCard(theme),
+              if (_recentFiles.isNotEmpty) _buildRecentHeader(),
+              Expanded(
+                child: _recentFiles.isEmpty
+                    ? _buildEmptyState(theme)
+                    : ListView.separated(
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                        itemCount: _recentFiles.length,
+                        separatorBuilder: (_, _) => const SizedBox(height: 8),
+                        itemBuilder: (context, index) {
+                          final f = _recentFiles[index];
+                          return _buildRecentTile(f, index);
+                        },
+                      ),
+              ),
+            ],
+          ),
+          if (_loading)
+            Container(
+              color: Colors.black.withValues(alpha: 0.3),
+              child: const Center(
+                child: CircularProgressIndicator(),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeroCard(ThemeData theme) {
+    return Container(
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF4FC3F7), Color(0xFF29B6F6)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF29B6F6).withValues(alpha: 0.35),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'APNG 动画图片阅览器',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '支持 APNG 动画逐帧播放、预览大图缩放、图片与 APNG 互转',
+            style: TextStyle(color: Colors.white.withValues(alpha: 0.9)),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: _pickAndOpen,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: const Color(0xFF0288D1),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 14),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                  ),
+                  icon: const Icon(Icons.folder_open),
+                  label: const Text('阅览图片',
+                      style:
+                          TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                          builder: (_) => const ConvertPage()),
+                    );
+                  },
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.white.withValues(alpha: 0.9),
+                    foregroundColor: const Color(0xFF0288D1),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 14),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                  ),
+                  icon: const Icon(Icons.swap_horiz),
+                  label: const Text('图片互转',
+                      style:
+                          TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRecentHeader() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+      child: Row(
+        children: [
+          const Expanded(
+            child: Text('最近浏览',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+          ),
+          TextButton.icon(
+            onPressed: _clearRecent,
+            icon: const Icon(Icons.delete_sweep, size: 18),
+            label: const Text('清空'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRecentTile(Map<String, String> f, int index) {
+    return Card(
+      margin: EdgeInsets.zero,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(color: Colors.grey.withValues(alpha: 0.15)),
+      ),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: const Color(0xFF4FC3F7).withValues(alpha: 0.15),
+          child: const Icon(Icons.image, color: Color(0xFF0288D1)),
+        ),
+        title: Text(
+          f['name'] ?? '',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: Text(
+          f['path'] ?? '',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontSize: 12),
+        ),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () {
+          final path = f['path'];
+          if (path != null && File(path).existsSync()) {
+            _openFile(path);
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('文件已不存在')),
+            );
+          }
+        },
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(ThemeData theme) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.image_search,
+              size: 96, color: theme.colorScheme.primary.withValues(alpha: 0.4)),
+          const SizedBox(height: 16),
+          const Text('还没有浏览记录'),
+          const SizedBox(height: 8),
+          Text(
+            '点击上方按钮选择 APNG 图片开始浏览',
+            style: TextStyle(color: theme.hintColor),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+  }
+}
