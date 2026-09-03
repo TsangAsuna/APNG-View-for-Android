@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
 
 import 'apng/apng_converter.dart';
@@ -10,6 +9,7 @@ import 'apng/apng_decoder.dart';
 import 'apng/apng_encoder.dart';
 import 'apng/apng_frame_view.dart';
 import 'apng/apng_player.dart';
+import 'platform_file_gateway.dart';
 
 /// 后台 isolate 解码入口
 List<DecodedImage> _decodeImagesWorker(List<String> paths) {
@@ -31,8 +31,6 @@ class ConvertPage extends StatefulWidget {
 
 class _ConvertPageState extends State<ConvertPage>
     with SingleTickerProviderStateMixin {
-  static const _channel = MethodChannel('com.apngviewer.apng_viewer/file');
-
   late final TabController _tab;
 
   // 图片 -> APNG
@@ -70,12 +68,11 @@ class _ConvertPageState extends State<ConvertPage>
 
   Future<void> _pickImages() async {
     try {
-      final result = await _channel.invokeMethod<List<dynamic>>('pickImages');
+      final result = await FileGateway.pickImages();
       if (result == null || result.isEmpty) return;
       setState(() => _converting = true);
       // 后台 isolate 解码，进度条不卡顿
-      final images = await compute(
-          _decodeImagesWorker, result.map((e) => e as String).toList());
+      final images = await compute(_decodeImagesWorker, result);
       if (!mounted) return;
       setState(() {
         _srcImages
@@ -232,7 +229,7 @@ class _ConvertPageState extends State<ConvertPage>
 
   Future<void> _pickApng() async {
     try {
-      final path = await _channel.invokeMethod<String>('pickApngFile');
+      final path = await FileGateway.pickApngFile();
       if (path == null || path.isEmpty || !File(path).existsSync()) {
         _snack('未选择文件');
         return;
@@ -259,10 +256,10 @@ class _ConvertPageState extends State<ConvertPage>
 
   Future<void> _chooseCustomDir() async {
     try {
-      final uri = await _channel.invokeMethod<String>('pickDirectory');
-      if (uri != null && uri.isNotEmpty) {
+      final name = await FileGateway.pickExportDirectory();
+      if (name != null && name.isNotEmpty) {
         setState(() {
-          _customDirName = uri.split('/').last;
+          _customDirName = name;
         });
       }
     } catch (_) {}
@@ -273,20 +270,12 @@ class _ConvertPageState extends State<ConvertPage>
     required String mime,
     required Uint8List data,
   }) async {
-    if (_useCustomDir) {
-      final ok = await _channel.invokeMethod<bool>('writeToDirectory', {
-        'fileName': fileName,
-        'mime': mime,
-        'data': data,
-      });
-      return ok ?? false;
-    }
-    final ok = await _channel.invokeMethod<bool>('saveFileDialog', {
-      'fileName': fileName,
-      'mime': mime,
-      'data': data,
-    });
-    return ok ?? false;
+    return FileGateway.writeExport(
+      fileName: fileName,
+      mime: mime,
+      data: data,
+      useCustomDir: _useCustomDir,
+    );
   }
 
   Future<void> _exportApng() async {
@@ -325,12 +314,12 @@ class _ConvertPageState extends State<ConvertPage>
       var count = 0;
       for (var i = 0; i < result.frames.length; i++) {
         final png = _encodeFramePng(result.frames[i]);
-        final ok = await _channel.invokeMethod<bool>('writeToDirectory', {
-          'fileName': '${_baseName()}_frame_${i + 1}.png',
-          'mime': 'image/png',
-          'data': png,
-        });
-        if (ok == true) count++;
+        final ok = await _writeFile(
+          fileName: '${_baseName()}_frame_${i + 1}.png',
+          mime: 'image/png',
+          data: png,
+        );
+        if (ok) count++;
       }
       if (!mounted) return;
       setState(() => _converting = false);
@@ -970,7 +959,6 @@ class _SelectableImageTileState extends State<_SelectableImageTile>
                     ),
                   ),
                 ),
-              ),
               ),
           ],
         ),

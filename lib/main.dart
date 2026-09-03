@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'apng/apng_decoder.dart';
 import 'convert_page.dart';
+import 'platform_file_gateway.dart';
 import 'viewer_page.dart';
 
 void main() {
@@ -100,7 +101,6 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   final List<Map<String, String>> _recentFiles = [];
   bool _loading = false;
-  MethodChannel? _fileChannel;
   MethodChannel? _intentChannel;
 
   static const _prefsKey = 'recent_apng_files';
@@ -108,15 +108,15 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    _fileChannel = const MethodChannel('com.apngviewer.apng_viewer/file');
     _intentChannel =
         const MethodChannel('com.apngviewer.apng_viewer/intent');
     _loadPrefs();
     _checkIntent();
   }
 
-  /// 检查外部通过文件管理器打开 APNG
+  /// 检查外部通过文件管理器打开 APNG（仅 Android 有 intent 通道）
   Future<void> _checkIntent() async {
+    if (!Platform.isAndroid) return;
     try {
       final path = await _intentChannel!.invokeMethod<String>('getPendingFile');
       if (path != null && path.isNotEmpty && File(path).existsSync()) {
@@ -151,8 +151,7 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _pickAndOpen() async {
     try {
-      final path =
-          await _fileChannel!.invokeMethod<String>('pickApngFile');
+      final path = await FileGateway.pickApngFile();
       if (path != null && path.isNotEmpty && File(path).existsSync()) {
         _openFile(path);
       }
