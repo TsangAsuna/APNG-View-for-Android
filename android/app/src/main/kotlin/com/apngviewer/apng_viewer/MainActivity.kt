@@ -62,6 +62,16 @@ class MainActivity : FlutterActivity() {
                         result.success(pendingPath)
                         pendingPath = null
                     }
+                    "clearPendingCache" -> {
+                        // 只清应用自身复制产生的缓存目录，绝不触碰源文件
+                        try {
+                            val cacheDir = File(cacheDir, "pending")
+                            cacheDir.deleteRecursively()
+                            result.success(true)
+                        } catch (e: Exception) {
+                            result.error("CLEAR_CACHE_FAILED", e.message, null)
+                        }
+                    }
                     else -> result.notImplemented()
                 }
             }

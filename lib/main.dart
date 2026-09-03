@@ -126,6 +126,18 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  /// 将文件加入最近浏览记录（去重置顶，最多保留 20 条）
+  Future<void> _addRecent(String path) async {
+    final name = path.split('/').last;
+    _recentFiles.removeWhere((f) => f['path'] == path);
+    _recentFiles.insert(0, {'path': path, 'name': name});
+    if (_recentFiles.length > 20) {
+      _recentFiles.removeRange(20, _recentFiles.length);
+    }
+    if (mounted) setState(() {});
+    await _savePrefs();
+  }
+
   Future<void> _loadPrefs() async {
     final prefs = await SharedPreferences.getInstance();
     final recent = prefs.getStringList(_prefsKey) ?? [];
@@ -165,6 +177,7 @@ class _HomePageState extends State<HomePage> {
   Future<void> _openFile(String path) async {
     // 直接跳转查看器，由 ViewerPage 后台 isolate 解码（避免主线程卡顿/闪退）
     final fileName = path.split('/').last;
+    await _addRecent(path); // 记录最近浏览（去重置顶）
     if (!mounted) return;
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -173,9 +186,12 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  /// 清空最近浏览记录，并同时清除 Android 端复制产生的缓存图片
+  /// （只清本应用缓存目录，绝不影响源文件）
   void _clearRecent() {
     setState(() => _recentFiles.clear());
     _savePrefs();
+    FileGateway.clearPendingCache();
   }
 
   @override

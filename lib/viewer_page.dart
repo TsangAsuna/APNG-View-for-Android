@@ -1,12 +1,12 @@
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:photo_view/photo_view.dart';
 
 import 'apng/apng_decoder.dart';
 import 'apng/apng_player.dart';
 import 'apng/apng_frame_view.dart';
+import 'platform_file_gateway.dart';
 
 class ViewerPage extends StatefulWidget {
   final String path;
@@ -22,22 +22,13 @@ class ViewerPage extends StatefulWidget {
   State<ViewerPage> createState() => _ViewerPageState();
 }
 
-/// 后台 isolate 解码入口：大 APNG 不阻塞 UI 线程
-ApngDecodeResult? _decodeWorker(List<Object> args) {
-  final path = args[0] as String;
-  try {
-    final bytes = File(path).readAsBytesSync();
-    return ApngDecoder.decode(bytes, filePath: path);
-  } catch (_) {
-    return null;
-  }
-}
-
 class _ViewerPageState extends State<ViewerPage> {
   Future<ApngDecodeResult?>? _future;
   ApngPlayer? _player;
   bool _fullscreen = false;
   double _speed = 1.0;
+  bool _saving = false;
+  String _decodeStatus = '';
 
   @override
   void initState() {
@@ -46,8 +37,49 @@ class _ViewerPageState extends State<ViewerPage> {
   }
 
   Future<ApngDecodeResult?> _load() async {
-    // 后台 isolate 解码，避免大 APNG 阻塞 UI
-    return await compute(_decodeWorker, <Object>[widget.path]);
+    // 并行解码：大 APNG 多 isolate 同时解压+压缩，帧进度实时回传
+    try {
+      final bytes = await File(widget.path).readAsBytes();
+      return await ApngDecoder.decodeAsync(
+        bytes,
+        filePath: widget.path,
+        onProgress: (done, total) {
+          if (mounted) {
+            setState(() => _decodeStatus = '正在解码 $done/$total 帧');
+          }
+        },
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 保存当前帧为 PNG（进度条拖到哪一帧就提取哪一帧）
+  Future<void> _saveCurrentFrame() async {
+    final frame = _player?.currentFrameData;
+    if (frame == null || _saving) return;
+    setState(() => _saving = true);
+    try {
+      final base = widget.fileName.replaceAll(RegExp(r'\.(apng|png)$', caseSensitive: false), '');
+      final name = '${base}_frame_${_player!.currentFrame + 1}.png';
+      final ok = await FileGateway.writeExport(
+        fileName: name,
+        mime: 'image/png',
+        data: frame.pngBytes,
+        useCustomDir: false,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(ok ? '已保存第 ${_player!.currentFrame + 1} 帧' : '保存已取消')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('保存失败: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   @override
@@ -79,14 +111,19 @@ class _ViewerPageState extends State<ViewerPage> {
         future: _future,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(
+            return Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text('正在解码 APNG… 大图可能需要几秒',
-                      style: TextStyle(color: Colors.white70, fontSize: 13)),
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 16),
+                  Text(
+                    _decodeStatus.isEmpty
+                        ? '正在解码 APNG… 大图可能需要几秒'
+                        : _decodeStatus,
+                    style:
+                        const TextStyle(color: Colors.white70, fontSize: 13),
+                  ),
                 ],
               ),
             );
@@ -214,6 +251,20 @@ class _ViewerPageState extends State<ViewerPage> {
                             },
                           ),
                         ),
+                      ),
+                      // 保存当前帧：进度条拖到哪一帧就提取哪一帧
+                      IconButton(
+                        icon: _saving
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2, color: Colors.white70),
+                              )
+                            : const Icon(Icons.save_alt,
+                                color: Colors.white, size: 20),
+                        tooltip: '保存当前帧',
+                        onPressed: _saving ? null : _saveCurrentFrame,
                       ),
                     ],
                   ),

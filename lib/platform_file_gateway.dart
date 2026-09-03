@@ -15,6 +15,18 @@ class FileGateway {
 
   static const _channel = MethodChannel('com.apngviewer.apng_viewer/file');
 
+  /// 清空本应用缓存目录下的图片缓存（Android 端 cacheDir/pending/）。
+  /// 只清理应用自己复制产生的缓存，绝不触碰源文件。
+  static Future<void> clearPendingCache() async {
+    try {
+      if (Platform.isAndroid) {
+        await _channel.invokeMethod<void>('clearPendingCache');
+      }
+    } catch (_) {
+      // 原生通道不可用时静默失败，不影响主流程
+    }
+  }
+
   /// iOS 原生通道（AppDelegate.swift 注册：PHPicker 选择 + 导出）
   static const _iosPickerChannel =
       MethodChannel('com.apngviewer.apng_viewer/ios_picker');

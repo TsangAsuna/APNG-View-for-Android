@@ -21,10 +21,11 @@ List<DecodedImage> _decodeImagesWorker(List<String> paths) {
 }
 
 /// 后台 isolate 解码 APNG（大文件不阻塞 UI）
-ApngDecodeResult? _decodeApngWorker(String path) {
+Future<ApngDecodeResult?> _decodeApngWorker(String path) async {
   try {
-    final bytes = File(path).readAsBytesSync();
-    return ApngDecoder.decode(bytes, filePath: path);
+    final bytes = await File(path).readAsBytes();
+    // 并行解码：大 APNG 多 isolate 同时解压+压缩，速度更快
+    return await ApngDecoder.decodeAsync(bytes, filePath: path);
   } catch (_) {
     return null;
   }
@@ -266,7 +267,7 @@ class _ConvertPageState extends State<ConvertPage>
         _snack('未选择文件');
         return;
       }
-      final result = await compute(_decodeApngWorker, path);
+      final result = await _decodeApngWorker(path);
       if (result == null) {
         _snack('无法解码该文件');
         return;
