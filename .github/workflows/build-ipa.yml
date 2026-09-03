@@ -42,7 +42,7 @@ jobs:
       # 仓库自带完整 ios/ 工程（含免签名 Podfile、iPad 适配、图标）
       # --no-codesign 产出未签名 .app，TrollStore/越狱可装
       - name: Build iOS Release (unsigned)
-        run: flutter build ios --release --no-codesign --target-platform ios-arm64
+        run: flutter build ios --release --no-codesign
 
       - name: Package IPA
         run: |
