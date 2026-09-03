@@ -1,4 +1,4 @@
-# APNG 阅览器 (APNG Viewer)
+# <img src="assets/icon.png" width="28" height="28" style="vertical-align: middle; margin-right: 6px;"> APNG 阅览器 (APNG Viewer)
 
 一个基于 **Flutter** 的 APNG 格式图片阅览器，支持 APNG 动画逐帧播放、静态 PNG 预览大图缩放、图片与 APNG 互转，完整适配 **Android 16 (API 36)**。
 
@@ -17,7 +17,7 @@
 
 ## 🏗️ 项目架构
 
-[![APNG 阅览器架构图](docs/architecture.svg)](docs/architecture.html)
+[![APNG 阅览器架构图](docs/architecture.png)](docs/architecture.html)
 
 > 🖱️ 点击上图可打开**可交互架构图**（支持缩放/搜索/聚焦/明暗主题/路线追踪）。
 
