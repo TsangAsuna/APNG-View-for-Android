@@ -1,8 +1,8 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:image/image.dart' as img;
 
 import 'apng/apng_converter.dart';
 import 'apng/apng_decoder.dart';
@@ -26,6 +26,27 @@ ApngDecodeResult? _decodeApngWorker(String path) {
   try {
     final bytes = File(path).readAsBytesSync();
     return ApngDecoder.decode(bytes, filePath: path);
+  } catch (_) {
+    return null;
+  }
+}
+
+/// 后台 isolate 编码 APNG（多张大图编码耗时，避免卡 UI）
+Uint8List? _encodeApngWorker(List<Object> args) {
+  try {
+    final raw = args[0] as List<dynamic>;
+    final frames = raw.cast<Uint8List>();
+    final width = args[1] as int;
+    final height = args[2] as int;
+    final delay = args[3] as int;
+    final loop = args[4] as int;
+    return ApngEncoder.encode(
+      frames: frames,
+      width: width,
+      height: height,
+      frameDurationsMs: List.filled(frames.length, delay),
+      loopCount: loop,
+    );
   } catch (_) {
     return null;
   }
@@ -157,14 +178,15 @@ class _ConvertPageState extends State<ConvertPage>
   Future<void> _generateApng() async {
     if (_srcImages.isEmpty) return;
     setState(() => _converting = true);
-    await Future.delayed(const Duration(milliseconds: 20));
-    final apng = ApngEncoder.encode(
-      frames: _srcImages.map((e) => e.rgbaBytes).toList(),
-      width: _srcImages.first.width,
-      height: _srcImages.first.height,
-      frameDurationsMs: List.filled(_srcImages.length, _frameDelay),
-      loopCount: _loopCount,
-    );
+    // 让编码转圈先渲染出来，避免同步编码时界面无反馈
+    await Future.delayed(const Duration(milliseconds: 30));
+    final apng = await compute(_encodeApngWorker, <Object>[
+      _srcImages.map((e) => e.rgbaBytes).toList(),
+      _srcImages.first.width,
+      _srcImages.first.height,
+      _frameDelay,
+      _loopCount,
+    ]);
     if (!mounted) return;
     setState(() {
       _converting = false;
@@ -323,11 +345,11 @@ class _ConvertPageState extends State<ConvertPage>
       setState(() => _converting = true);
       var count = 0;
       for (var i = 0; i < result.frames.length; i++) {
-        final png = _encodeFramePng(result.frames[i]);
+        // 解码时已生成 PNG 压缩字节，直接复用，无需重复编码
         final ok = await FileGateway.writeExport(
           fileName: '${_baseName()}_frame_${i + 1}.png',
           mime: 'image/png',
-          data: png,
+          data: result.frames[i].pngBytes,
           useCustomDir: true,
         );
         if (ok) count++;
@@ -360,11 +382,10 @@ class _ConvertPageState extends State<ConvertPage>
       setState(() => _converting = true);
       var count = 0;
       for (var i = 0; i < result.frames.length; i++) {
-        final png = _encodeFramePng(result.frames[i]);
         final ok = await _writeFile(
           fileName: '${_baseName()}_frame_${i + 1}.png',
           mime: 'image/png',
-          data: png,
+          data: result.frames[i].pngBytes,
         );
         if (ok) count++;
       }
@@ -378,16 +399,6 @@ class _ConvertPageState extends State<ConvertPage>
     final n = _apngName ?? 'apng';
     final dot = n.lastIndexOf('.');
     return dot > 0 ? n.substring(0, dot) : n;
-  }
-
-  Uint8List _encodeFramePng(ApngFrame f) {
-    final im = img.Image.fromBytes(
-      width: f.width,
-      height: f.height,
-      bytes: f.rgbaBytes.buffer,
-      numChannels: 4,
-    );
-    return img.encodePng(im);
   }
 
   void _snack(String msg) {
@@ -551,9 +562,7 @@ class _ConvertPageState extends State<ConvertPage>
               final f = p.currentFrameData;
               if (f == null) return const SizedBox.shrink();
               return ApngFrameView(
-                rgbaBytes: f.rgbaBytes,
-                width: f.width,
-                height: f.height,
+                pngBytes: f.pngBytes,
               );
             },
           ),
@@ -603,6 +612,11 @@ class _ConvertPageState extends State<ConvertPage>
             divisions: 49,
             label: '${_frameDelay}ms',
             onChanged: (v) {
+              // 拖动过程只更新显示值，不重新编码
+              setState(() => _frameDelay = v.round());
+            },
+            onChangeEnd: (v) {
+              // 松手后再重新生成，避免拖动时反复触发重编码
               setState(() => _frameDelay = v.round());
               if (_srcImages.length > 1) _generateApng();
             },
@@ -708,9 +722,7 @@ class _ConvertPageState extends State<ConvertPage>
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(8),
                               child: ApngFrameView(
-                                rgbaBytes: f.rgbaBytes,
-                                width: f.width,
-                                height: f.height,
+                                pngBytes: f.pngBytes,
                               ),
                             ),
                           ),
