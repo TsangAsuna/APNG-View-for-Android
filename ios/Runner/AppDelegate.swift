@@ -226,51 +226,68 @@ class ImagePickerHandler: NSObject, PHPickerViewControllerDelegate {
     }
   }
 
-  /// 从 NSItemProvider 读取原始文件数据（APNG 以 .png 结尾可被识别为 PNG）
+  /// 从 NSItemProvider 读取图片数据并统一转为标准 PNG 写入 tmp。
+  ///
+  /// 关键: 相册图片在 iPhone/iPad 上默认是 HEIC 编码, 纯 Dart 解码器
+  /// 不支持 HEIC。这里用系统 UIImage 统一转码:
+  /// - 真实 PNG/APNG(魔数 89504E47)→ 保留原始字节, 动画不丢
+  /// - HEIC/JPEG/其他 → UIImage 解码后 pngData() 转成标准 PNG
   private func loadItem(_ pickerResult: PHPickerResult) {
     let provider = pickerResult.itemProvider
     let pngType = UTType.png.identifier
     let imageType = UTType.image.identifier
 
+    let loadData: (String) -> Void = { [weak self] typeId in
+      provider.loadDataRepresentation(forTypeIdentifier: typeId) { data, error in
+        self?.processData(data, error: error)
+      }
+    }
+
     if provider.hasItemConformingToTypeIdentifier(pngType) {
-      provider.loadFileRepresentation(forTypeIdentifier: pngType) { [weak self] url, error in
-        self?.handleLoaded(url, error: error)
-      }
+      loadData(pngType)
     } else if provider.hasItemConformingToTypeIdentifier(imageType) {
-      provider.loadDataRepresentation(forTypeIdentifier: imageType) { [weak self] data, error in
-        self?.handleData(data, error: error)
-      }
+      loadData(imageType)
     } else {
       finishOne(nil)
     }
   }
 
-  private func handleLoaded(_ url: URL?, error: Error?) {
-    guard let url = url, error == nil else {
-      finishOne(nil)
-      return
-    }
-    // 拷贝到临时目录，避免原 URL 失效
-    let ext = url.pathExtension.isEmpty ? "png" : url.pathExtension
-    let dest = FileManager.default.temporaryDirectory
-      .appendingPathComponent("picker_\(UUID().uuidString).\(ext)")
-    do {
-      try FileManager.default.copyItem(at: url, to: dest)
-      finishOne(dest.path)
-    } catch {
-      finishOne(nil)
-    }
-  }
-
-  private func handleData(_ data: Data?, error: Error?) {
+  /// 校验数据: PNG/APNG 原样保留, 其他格式(HEIC/JPEG)转码为标准 PNG
+  private func processData(_ data: Data?, error: Error?) {
     guard let data = data, error == nil else {
       finishOne(nil)
       return
     }
+
     let dest = FileManager.default.temporaryDirectory
       .appendingPathComponent("picker_\(UUID().uuidString).png")
+
+    // PNG 魔数: 89 50 4E 47 0D 0A 1A 0A
+    let isPng = data.count > 8 &&
+      data[data.startIndex] == 0x89 &&
+      data[data.startIndex + 1] == 0x50 &&
+      data[data.startIndex + 2] == 0x4E &&
+      data[data.startIndex + 3] == 0x47
+
+    if isPng {
+      // 真实 PNG/APNG: 保留原始字节(动画不丢)
+      do {
+        try data.write(to: dest)
+        finishOne(dest.path)
+      } catch {
+        finishOne(nil)
+      }
+      return
+    }
+
+    // HEIC/JPEG 等: 用系统 UIImage 转码为 PNG
+    guard let image = UIImage(data: data),
+          let pngData = image.pngData() else {
+      finishOne(nil)
+      return
+    }
     do {
-      try data.write(to: dest)
+      try pngData.write(to: dest)
       finishOne(dest.path)
     } catch {
       finishOne(nil)
