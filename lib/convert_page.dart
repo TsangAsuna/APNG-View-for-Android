@@ -21,6 +21,16 @@ List<DecodedImage> _decodeImagesWorker(List<String> paths) {
   return out;
 }
 
+/// 后台 isolate 解码 APNG（大文件不阻塞 UI）
+ApngDecodeResult? _decodeApngWorker(String path) {
+  try {
+    final bytes = File(path).readAsBytesSync();
+    return ApngDecoder.decode(bytes, filePath: path);
+  } catch (_) {
+    return null;
+  }
+}
+
 /// 转换功能页：图片 -> APNG / APNG -> 图片
 class ConvertPage extends StatefulWidget {
   const ConvertPage({super.key});
@@ -235,8 +245,7 @@ class _ConvertPageState extends State<ConvertPage>
         _snack('未选择文件');
         return;
       }
-      final bytes = await File(path).readAsBytes();
-      final result = ApngDecoder.decode(bytes);
+      final result = await compute(_decodeApngWorker, path);
       if (result == null) {
         _snack('无法解码该文件');
         return;

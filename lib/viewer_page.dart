@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 import 'package:photo_view/photo_view.dart';
@@ -23,8 +24,19 @@ class ViewerPage extends StatefulWidget {
   State<ViewerPage> createState() => _ViewerPageState();
 }
 
+/// 后台 isolate 解码入口：大 APNG 不阻塞 UI 线程
+ApngDecodeResult? _decodeWorker(List<Object> args) {
+  final path = args[0] as String;
+  try {
+    final bytes = File(path).readAsBytesSync();
+    return ApngDecoder.decode(bytes, filePath: path);
+  } catch (_) {
+    return null;
+  }
+}
+
 class _ViewerPageState extends State<ViewerPage> {
-  Future<ApngDecodeResult>? _future;
+  Future<ApngDecodeResult?>? _future;
   ApngPlayer? _player;
   bool _fullscreen = false;
   double _speed = 1.0;
@@ -35,17 +47,9 @@ class _ViewerPageState extends State<ViewerPage> {
     _future = _load();
   }
 
-  Future<ApngDecodeResult> _load() async {
-    final bytes = await File(widget.path).readAsBytes();
-    final result = ApngDecoder.decode(bytes, filePath: widget.path);
-    if (result == null) {
-      throw Exception('decode failed');
-    }
-    if (mounted) {
-      _player?.dispose();
-      _player = ApngPlayer(result);
-    }
-    return result;
+  Future<ApngDecodeResult?> _load() async {
+    // 后台 isolate 解码，避免大 APNG 阻塞 UI
+    return await compute(_decodeWorker, <Object>[widget.path]);
   }
 
   @override
@@ -63,11 +67,8 @@ class _ViewerPageState extends State<ViewerPage> {
           : AppBar(
               backgroundColor: Colors.black,
               foregroundColor: Colors.white,
-              title: Text(
-                widget.fileName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+              title: Text(widget.fileName,
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
               actions: [
                 IconButton(
                   icon: const Icon(Icons.fullscreen),
@@ -76,13 +77,14 @@ class _ViewerPageState extends State<ViewerPage> {
                 ),
               ],
             ),
-      body: FutureBuilder<ApngDecodeResult>(
+      body: FutureBuilder<ApngDecodeResult?>(
         future: _future,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
             return const Center(child: CircularProgressIndicator());
           }
-          if (snapshot.hasError) {
+          final result = snapshot.data;
+          if (result == null) {
             return Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -102,18 +104,13 @@ class _ViewerPageState extends State<ViewerPage> {
             );
           }
 
-          final result = snapshot.data!;
-          // 播放器尚未初始化（首次加载时 _load 异步完成）
+          // 确保播放器已初始化（后台解码完成后）
           if (_player == null) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          // 启动播放（仅动画时）
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (result.isAnimated && !_player!.playing) {
+            _player = ApngPlayer(result);
+            if (result.isAnimated) {
               _player!.play();
             }
-          });
+          }
 
           return Column(
             children: [
@@ -133,7 +130,6 @@ class _ViewerPageState extends State<ViewerPage> {
 
   Widget _buildViewer(ApngDecodeResult result) {
     if (!result.isAnimated) {
-      // 静态大图：支持双指缩放
       return PhotoView(
         imageProvider: MemoryImage(getFirstFrameBytes(result)),
         backgroundDecoration: const BoxDecoration(color: Colors.black),
@@ -143,7 +139,6 @@ class _ViewerPageState extends State<ViewerPage> {
       );
     }
 
-    // 动画：显示当前帧（跟随播放器）
     return AnimatedBuilder(
       animation: _player!,
       builder: (context, _) {
@@ -165,23 +160,17 @@ class _ViewerPageState extends State<ViewerPage> {
   }
 
   Uint8List getFirstFrameBytes(ApngDecodeResult result) {
-    // 使用第一帧的 RGBA 构造 PNG 工具图片（MemImage 可接受原始字节）
-    // 这里直接复用第一帧的原始 APNG 文件字节更简单——但已被整体解码，
-    // 因此从 result 第一帧构造缓存图片。
     final f = result.frames.first;
-    // 用 image 包重新编码为 PNG 以便 MemoryImage 解码
     img.Image im = img.Image.fromBytes(
       width: f.width,
       height: f.height,
       bytes: f.rgbaBytes.buffer,
       numChannels: 4,
     );
-    final png = img.encodePng(im);
-    return png;
+    return img.encodePng(im);
   }
 
   Widget _buildControlBar(ApngDecodeResult result) {
-    // 动画控制栏
     return AnimatedBuilder(
       animation: _player!,
       builder: (context, _) {
@@ -195,7 +184,6 @@ class _ViewerPageState extends State<ViewerPage> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (isAnimated) ...[
-                  // 进度条
                   Row(
                     children: [
                       Text(
@@ -247,7 +235,6 @@ class _ViewerPageState extends State<ViewerPage> {
                         onPressed: () => _player!.nextFrame(),
                       ),
                       const SizedBox(width: 8),
-                      // 速度控制
                       _SpeedButton(
                         speed: _speed,
                         onChanged: (s) {
@@ -269,20 +256,16 @@ class _ViewerPageState extends State<ViewerPage> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    Text(
-                      '${result.width}×${result.height}',
-                      style: const TextStyle(color: Colors.white54, fontSize: 12),
-                    ),
-                    Text(
-                      '${result.frames.length} 帧',
-                      style: const TextStyle(color: Colors.white54, fontSize: 12),
-                    ),
+                    Text('${result.width}×${result.height}',
+                        style:
+                            const TextStyle(color: Colors.white54, fontSize: 12)),
+                    Text('${result.frames.length} 帧',
+                        style:
+                            const TextStyle(color: Colors.white54, fontSize: 12)),
                     if (result.isAnimated)
-                      Text(
-                        _formatDuration(result),
-                        style: const TextStyle(
-                            color: Colors.white54, fontSize: 12),
-                      ),
+                      Text(_formatDuration(result),
+                          style: const TextStyle(
+                              color: Colors.white54, fontSize: 12)),
                     _fullscreen
                         ? IconButton(
                             icon: const Icon(Icons.fullscreen_exit,
@@ -328,7 +311,8 @@ class _SpeedButton extends StatelessWidget {
       onSelected: onChanged,
       icon: Text(
         '${speed.toStringAsFixed(speed == speed.roundToDouble() ? 0 : 1)}×',
-        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+        style:
+            const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
       ),
       itemBuilder: (context) => const [
         PopupMenuItem(value: 0.25, child: Text('0.25× 慢速')),

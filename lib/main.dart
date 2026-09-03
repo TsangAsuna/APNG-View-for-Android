@@ -164,41 +164,14 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _openFile(String path) async {
-    setState(() => _loading = true);
-    try {
-      final bytes = await File(path).readAsBytes();
-      final result = ApngDecoder.decode(bytes, filePath: path);
-      if (!mounted) return;
-      setState(() => _loading = false);
-      if (result == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('无法解码该文件，可能不是有效的 APNG/PNG 图片')),
-        );
-        return;
-      }
-
-      // 添加到最近记录
-      final fileName = path.split('/').last;
-      _recentFiles.removeWhere((f) => f['path'] == path);
-      _recentFiles.insert(0, {'path': path, 'name': fileName});
-      if (_recentFiles.length > 10) {
-        _recentFiles.removeRange(10, _recentFiles.length);
-      }
-      _savePrefs();
-
-      if (!mounted) return;
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => ViewerPage(path: path, fileName: fileName),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _loading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('读取文件失败: $e')),
-      );
-    }
+    // 直接跳转查看器，由 ViewerPage 后台 isolate 解码（避免主线程卡顿/闪退）
+    final fileName = path.split('/').last;
+    if (!mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ViewerPage(path: path, fileName: fileName),
+      ),
+    );
   }
 
   void _clearRecent() {
