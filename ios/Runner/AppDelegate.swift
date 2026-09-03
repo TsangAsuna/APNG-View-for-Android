@@ -69,10 +69,32 @@ import UniformTypeIdentifiers
           return
         }
         result(self.writeToDocumentsDir(fileName: name, data: bytes))
+      case "clearPendingCache":
+        // 清除 PHPicker 复制到 tmp 的图片缓存（picker_ 前缀），
+        // 只清本应用产生的缓存，绝不触碰用户文件
+        result(self.clearTmpPickerCache())
       default:
         result(FlutterMethodNotImplemented)
       }
     }
+  }
+
+  /// 删除 tmp 目录下本应用 PHPicker 复制产生的缓存图片（picker_*）
+  private func clearTmpPickerCache() -> Bool {
+    let tmp = FileManager.default.temporaryDirectory
+    guard let files = try? FileManager.default.contentsOfDirectory(
+        at: tmp, includingPropertiesForKeys: nil) else {
+      return false
+    }
+    var removed = 0
+    for url in files {
+      if url.lastPathComponent.hasPrefix("picker_") {
+        if (try? FileManager.default.removeItem(at: url)) != nil {
+          removed += 1
+        }
+      }
+    }
+    return removed > 0
   }
 
   /// 弹出 iOS 系统「存储」对话框（导出到「文件」App）

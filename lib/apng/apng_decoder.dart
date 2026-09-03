@@ -110,12 +110,22 @@ class ApngDecoder {
 
       final canvasW = info.width;
       final canvasH = info.height;
-      final n = info.numFrames;
       final pngInfo = info as img.PngInfo;
 
       // 收集帧元数据；全尺寸 source 帧才可并行独立解码
       final frames = pngInfo.frames;
-      final fast = n > 1 &&
+
+      // 安全防护：APNG 允许第一帧无 fcTL（IDAT 默认图），此时
+      // frames.length 可能 != numFrames，跳帧索引会越界抛异常。
+      // 这类文件直接回退串行 decode()，保证能显示。
+      final frameCount = frames.length;
+      if (frameCount == 0 || frameCount != pngInfo.numFrames) {
+        final r = decode(bytes, filePath: filePath);
+        onProgress?.call(r?.frames.length ?? 0, r?.frames.length ?? 0);
+        return r;
+      }
+
+      final fast = frameCount > 1 &&
           frames.every((f) =>
               f.xOffset == 0 &&
               f.yOffset == 0 &&
@@ -124,7 +134,7 @@ class ApngDecoder {
               f.blend == img.PngBlendMode.source);
 
       // 复杂动画（部分区域更新/混合/清除）回退原串行实现，保证帧合成正确
-      if (!fast || n <= 1) {
+      if (!fast) {
         final r = decode(bytes, filePath: filePath);
         onProgress?.call(r?.frames.length ?? 0, r?.frames.length ?? 0);
         return r;
@@ -133,7 +143,7 @@ class ApngDecoder {
       // 第二步：并行逐帧解码 + 并行 PNG 压缩
       // 帧时长在主子 isolate 由 delayNum/delayDen 计算（decodeFrame 不设置时长）
       final frameDurations = <int>[];
-      for (final f in pngInfo.frames) {
+      for (final f in frames) {
         var d = 0;
         if (f.delayNum > 0 && f.delayDen > 0) {
           d = (f.delayNum * 1000 / f.delayDen).round();
@@ -141,47 +151,62 @@ class ApngDecoder {
         frameDurations.add(d > 0 ? d : 100);
       }
 
-      final workerCount = _workerCount(n);
+      final workerCount = _workerCount(frameCount);
       final batches = <List<int>>[];
-      for (var i = 0; i < n; i += workerCount) {
+      for (var i = 0; i < frameCount; i += workerCount) {
         batches.add(List.generate(
-            i + workerCount <= n ? workerCount : n - i, (k) => i + k));
+            i + workerCount <= frameCount ? workerCount : frameCount - i,
+            (k) => i + k));
       }
 
-      final results = List<ApngFrame?>.filled(n, null);
+      // 用 TransferableTypedData 零拷贝传递帧字节，避免每帧拷贝整个文件
+      final transferable = TransferableTypedData.fromList([bytes]);
+
+      final results = List<ApngFrame?>.filled(frameCount, null);
       final doneCount = _ProgressCounter();
       for (final batch in batches) {
         final futures = <Future<void>>[];
         for (final idx in batch) {
           futures.add(Future(() async {
             final frame = await _decodeOneFrame(
-                bytes, idx, canvasW, canvasH, frameDurations[idx]);
+                transferable, idx, canvasW, canvasH, frameDurations[idx]);
             results[idx] = frame;
             final done = doneCount.add();
-            onProgress?.call(done, n);
+            onProgress?.call(done, frameCount);
           }));
         }
         await Future.wait(futures);
       }
 
-      // 收集（保持原始帧序）
+      // 收集（保持原始帧序）；任一帧失败则整体回退串行解码，
+      // 保证任何 APNG 都能显示而不是返回 null
       final out = <ApngFrame>[];
       final durations = <int>[];
       for (final f in results) {
-        if (f == null) return null;
+        if (f == null) {
+          final r = decode(bytes, filePath: filePath);
+          onProgress?.call(r?.frames.length ?? 0, r?.frames.length ?? 0);
+          return r;
+        }
         out.add(f);
         durations.add(f.durationMs);
       }
+
+      // loopCount：acTL 的 num_plays（0 = 无限循环）
+      final loopCount = info is img.PngInfo ? info.repeat : 0;
 
       return ApngDecodeResult(
         frames: out,
         width: canvasW,
         height: canvasH,
-        loopCount: 0,
+        loopCount: loopCount,
         durations: durations,
       );
     } catch (e) {
-      return null;
+      // 任何意外错误回退串行解码，兜底保证可预览
+      final r = decode(bytes, filePath: filePath);
+      onProgress?.call(r?.frames.length ?? 0, r?.frames.length ?? 0);
+      return r;
     }
   }
 
@@ -193,20 +218,26 @@ class ApngDecoder {
 
   /// 在后台 isolate 中解码第 [idx] 帧并压缩为 PNG（快速路径帧）
   static Future<ApngFrame?> _decodeOneFrame(
-      Uint8List bytes, int idx, int w, int h, int durationMs) async {
+      TransferableTypedData bytes, int idx, int w, int h, int durationMs) async {
     return await compute(_frameWorker, <Object>[bytes, idx, w, h, durationMs]);
   }
 
   /// isolate worker：独立 decoder 解码单帧 + level1 压缩
   static ApngFrame? _frameWorker(List<Object> args) {
     try {
-      final bytes = args[0] as Uint8List;
+      final data = args[0] as TransferableTypedData;
+      final bytes = data.materialize().asUint8List();
       final idx = args[1] as int;
       final w = args[2] as int;
       final h = args[3] as int;
       final durationMs = args[4] as int;
       final decoder = img.PngDecoder();
-      if (decoder.startDecode(bytes) == null) return null;
+      final info = decoder.startDecode(bytes);
+      if (info == null) return null;
+      // 防御：帧索引越界（无 fcTL 第一帧等情况）直接失败，
+      // 由上层整体回退串行解码
+      final pngInfo = info as img.PngInfo;
+      if (idx < 0 || idx >= pngInfo.frames.length) return null;
       final image = decoder.decodeFrame(idx);
       if (image == null) return null;
       final rgba = image.numChannels != 4
