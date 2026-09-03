@@ -1,0 +1,75 @@
+name: Build iOS IPA (TrollStore)
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+    paths: ['ios/**', 'lib/**', 'pubspec.yaml', '.github/workflows/build-ipa.yml']
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+    concurrency:
+      group: ios-${{ github.ref }}
+      cancel-in-progress: true
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter (stable)
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          channel: 'stable'
+          cache: true
+
+      # file_picker 的 iOS 依赖走 SPM 时可能要求签名；关闭 SPM 走 CocoaPods
+      - name: Disable Swift Package Manager
+        run: flutter config --no-enable-swift-package-manager
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Run tests
+        run: flutter test
+
+      # 仓库自带完整 ios/ 工程（含免签名 Podfile、iPad 适配、图标）
+      # --no-codesign 产出未签名 .app，TrollStore/越狱可装
+      - name: Build iOS Release (unsigned)
+        run: flutter build ios --release --no-codesign --target-platform ios-arm64
+
+      - name: Package IPA
+        run: |
+          APP_PATH=$(find build/ios/iphoneos -name "*.app" -type d | head -1)
+          if [ -z "$APP_PATH" ]; then echo "ERROR: .app not found"; exit 1; fi
+          VERSION=$(grep '^version:' pubspec.yaml | cut -d' ' -f2 | cut -d'+' -f1)
+          rm -rf Payload && mkdir Payload
+          cp -R "$APP_PATH" Payload/
+          zip -r -9 "APNGViewer-v${VERSION}-unsigned.ipa" Payload/
+          echo "IPA_NAME=APNGViewer-v${VERSION}-unsigned.ipa" >> "$GITHUB_ENV"
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: apng-viewer-ios-ipa
+          path: ${{ env.IPA_NAME }}
+
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: APNG 阅览器 iOS ${{ github.ref_name }}
+          body: |
+            ## APNG 阅览器 iOS ${{ github.ref_name }}
+            - 未签名 .ipa，适用于 TrollStore / 越狱环境
+            - 支持 iPad Pro 12.9 寸全方向旋转与多任务缩放
+            - 从「文件」App 打开 APNG/PNG（file_picker）
+            - 部署目标 iOS 15.0+
+          files: ${{ env.IPA_NAME }}
