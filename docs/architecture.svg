@@ -1,0 +1,269 @@
+<svg viewBox="0 0 1010 752" role="img" lang="zh-CN" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="classic" data-quality-profile="showcase">
+        <title id="archify-diagram-title">APNG 阅览器 — 应用架构</title>
+        <desc id="archify-diagram-description">由 Archify 生成的架构图。</desc>
+        <!-- Definitions -->
+        <defs>
+          <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-default" />
+          </marker>
+          <marker id="arrowhead-emphasis" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-emphasis" />
+          </marker>
+          <marker id="arrowhead-security" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-security" />
+          </marker>
+          <marker id="arrowhead-dashed" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-dashed" />
+          </marker>
+          <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 0 0 0 40" class="c-grid" stroke-width="0.5"/>
+          </pattern>
+        </defs>
+
+        <!-- Background Grid -->
+        <rect width="100%" height="100%" fill="url(#grid)" />
+
+        <!-- Boundaries (behind everything) -->
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="0" data-composition-frame-label="Flutter 表现层" x="10" y="110" width="370" height="474" rx="12" class="c-region" stroke-width="1"/>
+
+        <!-- Connection paths (before components for correct z-order) -->
+        <path data-edge-from="user" data-edge-to="home" data-edge-label="选择文件" data-edge-key="0" data-edge-id="user-to-home" data-composition-points="150,330;185,330;185,172;220,172" d="M 150 330 L 177 330 Q 185 330 185 322 L 185 180 Q 185 172 193 172 L 220 172" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="home" data-edge-to="viewer" data-edge-label="push" data-edge-key="1" data-edge-id="home-to-viewer" data-composition-points="285,204;285,300" d="M 285 204 L 285 300" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="home" data-edge-to="convert" data-edge-label="push" data-edge-key="2" data-edge-id="home-to-convert" data-composition-points="220,172;195,172;195,532;170,532" d="M 220 172 L 203 172 Q 195 172 195 180 L 195 524 Q 195 532 187 532 L 170 532" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="viewer" data-edge-to="player" data-edge-label="播放控制" data-edge-key="3" data-edge-id="viewer-to-player" data-composition-points="350,332;420,332" d="M 350 332 L 420 332" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="decoder" data-edge-to="player" data-edge-label="帧数据" data-edge-key="4" data-edge-id="decoder-to-player" data-composition-points="490,204;490,300" d="M 490 204 L 490 300" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="decoder" data-edge-to="viewer" data-edge-label="PNG 帧" data-edge-key="5" data-edge-id="decoder-to-viewer" data-composition-points="420,172;385,172;385,332;350,332" d="M 420 172 L 393 172 Q 385 172 385 180 L 385 324 Q 385 332 377 332 L 350 332" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+        <path data-edge-from="encoder" data-edge-to="convert" data-edge-label="APNG 字节" data-edge-key="6" data-edge-id="encoder-to-convert" data-composition-points="420,652;295,652;295,532;170,532" d="M 420 652 L 303 652 Q 295 652 295 644 L 295 540 Q 295 532 287 532 L 170 532" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="converter" data-edge-to="encoder" data-edge-label="RGBA 帧" data-edge-key="7" data-edge-id="converter-to-encoder" data-composition-points="630,652;560,652" d="M 630 652 L 560 652" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="filegateway" data-edge-to="android-saf" data-edge-label="SAF 通道" data-edge-key="8" data-edge-id="filegateway-to-android-saf" data-composition-points="770,165;840,165" d="M 770 165 L 840 165" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="filegateway" data-edge-to="ios-picker" data-edge-label="ios_picker 通道" data-edge-key="9" data-edge-id="filegateway-to-ios-picker" data-composition-points="770,179;805,179;805,332;840,332" d="M 770 179 L 797 179 Q 805 179 805 187 L 805 324 Q 805 332 813 332 L 840 332" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+
+        <!-- Components -->
+        <g id="node-user" data-node-id="user" data-node-label="用户" tabindex="0" role="button" aria-label="聚焦用户，Android / iOS, 架构组件" aria-pressed="false" data-node-kind="external" data-node-sublabel="Android / iOS" data-node-context="架构组件">
+          <title>用户 · Android / iOS · 架构组件</title>
+          <rect x="40" y="300" width="110" height="60" rx="6" class="c-mask"/>
+          <rect x="40" y="300" width="110" height="60" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(46 306) scale(0.6875)">
+            <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
+            <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="95" y="328" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">用户</text>
+        <text data-detail="context" x="95" y="344" class="t-muted" font-size="9" text-anchor="middle">Android / iOS</text>
+        </g>
+
+        <g id="node-home" data-node-id="home" data-node-label="HomePage" tabindex="0" role="button" aria-label="聚焦HomePage，文件选择 · 最近记录, Flutter 表现层" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="文件选择 · 最近记录" data-node-tag="main.dart" data-node-context="Flutter 表现层">
+          <title>HomePage · 文件选择 · 最近记录 · Flutter 表现层 · main.dart</title>
+          <rect x="220" y="140" width="130" height="64" rx="6" class="c-mask"/>
+          <rect x="220" y="140" width="130" height="64" rx="6" class="c-frontend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(226 146) scale(0.6875)">
+            <rect x="2" y="3" width="12" height="10" rx="2"/>
+            <path d="M2 6.5h12"/>
+            <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
+            <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="285" y="170" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">HomePage</text>
+        <text data-detail="context" x="285" y="186" class="t-muted" font-size="9" text-anchor="middle">文件选择 · 最近记录</text>
+        <text data-detail="fine" x="285" y="196" class="t-frontend" font-size="7" text-anchor="middle">main.dart</text>
+        </g>
+
+        <g id="node-viewer" data-node-id="viewer" data-node-label="ViewerPage" tabindex="0" role="button" aria-label="聚焦ViewerPage，播放控制 · 进度条 · 缩放, Flutter 表现层" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="播放控制 · 进度条 · 缩放" data-node-tag="viewer_page.dart" data-node-context="Flutter 表现层">
+          <title>ViewerPage · 播放控制 · 进度条 · 缩放 · Flutter 表现层 · viewer_page.dart</title>
+          <rect x="220" y="300" width="130" height="64" rx="6" class="c-mask"/>
+          <rect x="220" y="300" width="130" height="64" rx="6" class="c-frontend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(226 306) scale(0.6875)">
+            <rect x="2" y="3" width="12" height="10" rx="2"/>
+            <path d="M2 6.5h12"/>
+            <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
+            <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="285" y="330" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">ViewerPage</text>
+        <text data-detail="context" x="285" y="346" class="t-muted" font-size="8.4" text-anchor="middle">播放控制 · 进度条 · 缩放</text>
+        <text data-detail="fine" x="285" y="356" class="t-frontend" font-size="7" text-anchor="middle">viewer_page.dart</text>
+        </g>
+
+        <g id="node-convert" data-node-id="convert" data-node-label="ConvertPage" tabindex="0" role="button" aria-label="聚焦ConvertPage，图片↔APNG 互转, Flutter 表现层" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="图片↔APNG 互转" data-node-tag="convert_page.dart" data-node-context="Flutter 表现层">
+          <title>ConvertPage · 图片↔APNG 互转 · Flutter 表现层 · convert_page.dart</title>
+          <rect x="40" y="500" width="130" height="64" rx="6" class="c-mask"/>
+          <rect x="40" y="500" width="130" height="64" rx="6" class="c-frontend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(46 506) scale(0.6875)">
+            <rect x="2" y="3" width="12" height="10" rx="2"/>
+            <path d="M2 6.5h12"/>
+            <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
+            <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="105" y="530" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">ConvertPage</text>
+        <text data-detail="context" x="105" y="546" class="t-muted" font-size="9" text-anchor="middle">图片↔APNG 互转</text>
+        <text data-detail="fine" x="105" y="556" class="t-frontend" font-size="7" text-anchor="middle">convert_page.dart</text>
+        </g>
+
+        <g id="node-decoder" data-node-id="decoder" data-node-label="ApngDecoder" tabindex="0" role="button" aria-label="聚焦ApngDecoder，APNG → PNG 压缩帧, 架构组件" aria-pressed="false" data-node-kind="backend" data-node-sublabel="APNG → PNG 压缩帧" data-node-tag="apng_decoder.dart" data-node-context="架构组件">
+          <title>ApngDecoder · APNG → PNG 压缩帧 · 架构组件 · apng_decoder.dart</title>
+          <rect x="420" y="140" width="140" height="64" rx="6" class="c-mask"/>
+          <rect x="420" y="140" width="140" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(426 146) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="490" y="170" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">ApngDecoder</text>
+        <text data-detail="context" x="490" y="186" class="t-muted" font-size="9" text-anchor="middle">APNG → PNG 压缩帧</text>
+        <text data-detail="fine" x="490" y="196" class="t-backend" font-size="7" text-anchor="middle">apng_decoder.dart</text>
+        </g>
+
+        <g id="node-player" data-node-id="player" data-node-label="ApngPlayer" tabindex="0" role="button" aria-label="聚焦ApngPlayer，帧调度 · loopCount · 变速, 架构组件" aria-pressed="false" data-node-kind="backend" data-node-sublabel="帧调度 · loopCount · 变速" data-node-tag="apng_player.dart" data-node-context="架构组件">
+          <title>ApngPlayer · 帧调度 · loopCount · 变速 · 架构组件 · apng_player.dart</title>
+          <rect x="420" y="300" width="140" height="64" rx="6" class="c-mask"/>
+          <rect x="420" y="300" width="140" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(426 306) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="490" y="330" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">ApngPlayer</text>
+        <text data-detail="context" x="490" y="346" class="t-muted" font-size="8.8" text-anchor="middle">帧调度 · loopCount · 变速</text>
+        <text data-detail="fine" x="490" y="356" class="t-backend" font-size="7" text-anchor="middle">apng_player.dart</text>
+        </g>
+
+        <g id="node-encoder" data-node-id="encoder" data-node-label="ApngEncoder" tabindex="0" role="button" aria-label="聚焦ApngEncoder，多帧 RGBA → APNG, 架构组件" aria-pressed="false" data-node-kind="backend" data-node-sublabel="多帧 RGBA → APNG" data-node-tag="apng_encoder.dart" data-node-context="架构组件">
+          <title>ApngEncoder · 多帧 RGBA → APNG · 架构组件 · apng_encoder.dart</title>
+          <rect x="420" y="620" width="140" height="64" rx="6" class="c-mask"/>
+          <rect x="420" y="620" width="140" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(426 626) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="490" y="650" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">ApngEncoder</text>
+        <text data-detail="context" x="490" y="666" class="t-muted" font-size="9" text-anchor="middle">多帧 RGBA → APNG</text>
+        <text data-detail="fine" x="490" y="676" class="t-backend" font-size="7" text-anchor="middle">apng_encoder.dart</text>
+        </g>
+
+        <g id="node-filegateway" data-node-id="filegateway" data-node-label="FileGateway" tabindex="0" role="button" aria-label="聚焦FileGateway，跨平台文件网关, 架构组件" aria-pressed="false" data-node-kind="backend" data-node-sublabel="跨平台文件网关" data-node-tag="platform_file_gateway.dart" data-node-context="架构组件">
+          <title>FileGateway · 跨平台文件网关 · 架构组件 · platform_file_gateway.dart</title>
+          <rect x="630" y="140" width="140" height="64" rx="6" class="c-mask"/>
+          <rect x="630" y="140" width="140" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(636 146) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="700" y="170" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">FileGateway</text>
+        <text data-detail="context" x="700" y="186" class="t-muted" font-size="9" text-anchor="middle">跨平台文件网关</text>
+        <text data-detail="fine" x="700" y="196" class="t-backend" font-size="7" text-anchor="middle">platform_file_gateway.dart</text>
+        </g>
+
+        <g id="node-converter" data-node-id="converter" data-node-label="ApngConverter" tabindex="0" role="button" aria-label="聚焦ApngConverter，图片解码 · 缩略图, 架构组件" aria-pressed="false" data-node-kind="backend" data-node-sublabel="图片解码 · 缩略图" data-node-tag="apng_converter.dart" data-node-context="架构组件">
+          <title>ApngConverter · 图片解码 · 缩略图 · 架构组件 · apng_converter.dart</title>
+          <rect x="630" y="620" width="140" height="64" rx="6" class="c-mask"/>
+          <rect x="630" y="620" width="140" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(636 626) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="700" y="650" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">ApngConverter</text>
+        <text data-detail="context" x="700" y="666" class="t-muted" font-size="9" text-anchor="middle">图片解码 · 缩略图</text>
+        <text data-detail="fine" x="700" y="676" class="t-backend" font-size="7" text-anchor="middle">apng_converter.dart</text>
+        </g>
+
+        <g id="node-android-saf" data-node-id="android-saf" data-node-label="Android SAF" tabindex="0" role="button" aria-label="聚焦Android SAF，MethodChannel, 架构组件" aria-pressed="false" data-node-kind="security" data-node-sublabel="MethodChannel" data-node-tag="MainActivity.kt" data-node-context="架构组件">
+          <title>Android SAF · MethodChannel · 架构组件 · MainActivity.kt</title>
+          <rect x="840" y="140" width="130" height="64" rx="6" class="c-mask"/>
+          <rect x="840" y="140" width="130" height="64" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(846 146) scale(0.6875)">
+            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
+            <path d="m5.8 8 1.5 1.5 3-3"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="905" y="170" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Android SAF</text>
+        <text data-detail="context" x="905" y="186" class="t-muted" font-size="9" text-anchor="middle">MethodChannel</text>
+        <text data-detail="fine" x="905" y="196" class="t-security" font-size="7" text-anchor="middle">MainActivity.kt</text>
+        </g>
+
+        <g id="node-ios-picker" data-node-id="ios-picker" data-node-label="iOS PHPicker" tabindex="0" role="button" aria-label="聚焦iOS PHPicker，原生图片选择, 架构组件" aria-pressed="false" data-node-kind="security" data-node-sublabel="原生图片选择" data-node-tag="AppDelegate.swift" data-node-context="架构组件">
+          <title>iOS PHPicker · 原生图片选择 · 架构组件 · AppDelegate.swift</title>
+          <rect x="840" y="300" width="130" height="64" rx="6" class="c-mask"/>
+          <rect x="840" y="300" width="130" height="64" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(846 306) scale(0.6875)">
+            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
+            <path d="m5.8 8 1.5 1.5 3-3"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="905" y="330" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">iOS PHPicker</text>
+        <text data-detail="context" x="905" y="346" class="t-muted" font-size="9" text-anchor="middle">原生图片选择</text>
+        <text data-detail="fine" x="905" y="356" class="t-security" font-size="7" text-anchor="middle">AppDelegate.swift</text>
+        </g>
+
+        <g id="node-prefs" data-node-id="prefs" data-node-label="SharedPreferences" tabindex="0" role="button" aria-label="聚焦SharedPreferences，主题 · 最近记录, 架构组件" aria-pressed="false" data-node-kind="database" data-node-sublabel="主题 · 最近记录" data-node-context="架构组件">
+          <title>SharedPreferences · 主题 · 最近记录 · 架构组件</title>
+          <rect x="840" y="460" width="130" height="64" rx="6" class="c-mask"/>
+          <rect x="840" y="460" width="130" height="64" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(846 466) scale(0.6875)">
+            <ellipse cx="8" cy="4" rx="5" ry="2"/>
+            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="905" y="490" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">SharedPreferences</text>
+        <text data-detail="context" x="905" y="506" class="t-muted" font-size="9" text-anchor="middle">主题 · 最近记录</text>
+        </g>
+
+        <!-- Connection labels -->
+        <g data-detail="context" data-edge-from="user" data-edge-to="home" data-edge-label="选择文件" data-edge-key="0" data-edge-id="user-to-home">
+          <rect x="125.8" y="240" width="48.4" height="14" rx="3" class="c-mask"/>
+          <text x="150" y="250" class="t-muted" font-size="8" text-anchor="middle">选择文件</text>
+        </g>
+        <g data-detail="context" data-edge-from="home" data-edge-to="viewer" data-edge-label="push" data-edge-key="1" data-edge-id="home-to-viewer">
+          <rect x="270" y="208" width="30" height="14" rx="3" class="c-mask"/>
+          <text x="285" y="218" class="t-muted" font-size="8" text-anchor="middle">push</text>
+        </g>
+        <g data-detail="context" data-edge-from="home" data-edge-to="convert" data-edge-label="push" data-edge-key="2" data-edge-id="home-to-convert">
+          <rect x="185" y="510" width="30" height="14" rx="3" class="c-mask"/>
+          <text x="200" y="520" class="t-muted" font-size="8" text-anchor="middle">push</text>
+        </g>
+        <g data-detail="context" data-edge-from="viewer" data-edge-to="player" data-edge-label="播放控制" data-edge-key="3" data-edge-id="viewer-to-player">
+          <rect x="393.8" y="368" width="48.4" height="14" rx="3" class="c-mask"/>
+          <text x="418" y="378" class="t-backend" font-size="8" text-anchor="middle">播放控制</text>
+        </g>
+        <g data-detail="context" data-edge-from="decoder" data-edge-to="player" data-edge-label="帧数据" data-edge-key="4" data-edge-id="decoder-to-player">
+          <rect x="470.6" y="208" width="38.8" height="14" rx="3" class="c-mask"/>
+          <text x="490" y="218" class="t-muted" font-size="8" text-anchor="middle">帧数据</text>
+        </g>
+        <g data-detail="context" data-edge-from="decoder" data-edge-to="viewer" data-edge-label="PNG 帧" data-edge-key="5" data-edge-id="decoder-to-viewer">
+          <rect x="372.6" y="240" width="38.8" height="14" rx="3" class="c-mask"/>
+          <text x="392" y="250" class="t-messagebus" font-size="8" text-anchor="middle">PNG 帧</text>
+        </g>
+        <g data-detail="context" data-edge-from="encoder" data-edge-to="convert" data-edge-label="APNG 字节" data-edge-key="6" data-edge-id="encoder-to-convert">
+          <rect x="268.4" y="572" width="53.199999999999996" height="14" rx="3" class="c-mask"/>
+          <text x="295" y="582" class="t-muted" font-size="8" text-anchor="middle">APNG 字节</text>
+        </g>
+        <g data-detail="context" data-edge-from="converter" data-edge-to="encoder" data-edge-label="RGBA 帧" data-edge-key="7" data-edge-id="converter-to-encoder">
+          <rect x="573.2" y="632" width="43.6" height="14" rx="3" class="c-mask"/>
+          <text x="595" y="642" class="t-muted" font-size="8" text-anchor="middle">RGBA 帧</text>
+        </g>
+        <g data-detail="context" data-edge-from="filegateway" data-edge-to="android-saf" data-edge-label="SAF 通道" data-edge-key="8" data-edge-id="filegateway-to-android-saf">
+          <rect x="780.8" y="145" width="48.4" height="14" rx="3" class="c-mask"/>
+          <text x="805" y="155" class="t-muted" font-size="8" text-anchor="middle">SAF 通道</text>
+        </g>
+        <g data-detail="context" data-edge-from="filegateway" data-edge-to="ios-picker" data-edge-label="ios_picker 通道" data-edge-key="9" data-edge-id="filegateway-to-ios-picker">
+          <rect x="764" y="235.5" width="82" height="14" rx="3" class="c-mask"/>
+          <text x="805" y="245.5" class="t-muted" font-size="8" text-anchor="middle">ios_picker 通道</text>
+        </g>
+
+        <!-- Boundary labels (foreground masks keep routes out of titles) -->
+        <g data-graph-role="structural-frame-label" data-composition-frame-id="0" data-composition-frame-kind="region" data-composition-frame-label="Flutter 表现层">
+          <rect data-graph-role="structural-frame-label-mask" x="14" y="120" width="85.6" height="16" rx="3" class="c-mask"/>
+          <text data-boundary-label="" x="18" y="133" class="t-cloud" font-size="9" font-weight="600">Flutter 表现层</text>
+        </g>
+
+        <!-- Legend -->
+        <g data-legend="" data-legend-bridge="">
+          <text x="40" y="716" class="t-primary" font-size="12" font-weight="650">图例</text>
+          <g data-legend-semantic-kind="frontend" data-legend-kind="frontend" data-legend-label="前端" data-legend-x="40" data-legend-baseline="736" data-legend-width="63">
+            <rect x="40" y="727" width="16" height="10" rx="2.5" class="c-frontend" stroke-width="1"/>
+            <text x="62" y="736" class="t-muted" font-size="10" font-weight="500">前端</text>
+          </g>
+          <g data-legend-semantic-kind="backend" data-legend-kind="backend" data-legend-label="后端" data-legend-x="125" data-legend-baseline="736" data-legend-width="63">
+            <rect x="125" y="727" width="16" height="10" rx="2.5" class="c-backend" stroke-width="1"/>
+            <text x="147" y="736" class="t-muted" font-size="10" font-weight="500">后端</text>
+          </g>
+          <g data-legend-semantic-kind="database" data-legend-kind="database" data-legend-label="数据库" data-legend-x="210" data-legend-baseline="736" data-legend-width="73">
+            <rect x="210" y="727" width="16" height="10" rx="2.5" class="c-database" stroke-width="1"/>
+            <text x="232" y="736" class="t-muted" font-size="10" font-weight="500">数据库</text>
+          </g>
+          <g data-legend-semantic-kind="security" data-legend-kind="security" data-legend-label="安全" data-legend-x="305" data-legend-baseline="736" data-legend-width="63">
+            <rect x="305" y="727" width="16" height="10" rx="2.5" class="c-security" stroke-width="1"/>
+            <text x="327" y="736" class="t-muted" font-size="10" font-weight="500">安全</text>
+          </g>
+          <g data-legend-semantic-kind="external" data-legend-kind="external" data-legend-label="外部系统" data-legend-x="390" data-legend-baseline="736" data-legend-width="83">
+            <rect x="390" y="727" width="16" height="10" rx="2.5" class="c-external" stroke-width="1"/>
+            <text x="412" y="736" class="t-muted" font-size="10" font-weight="500">外部系统</text>
+          </g>
+        </g>
+      </svg>

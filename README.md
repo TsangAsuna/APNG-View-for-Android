@@ -15,6 +15,18 @@
 - 🗂️ **最近浏览记录**：记住最近打开的 10 个文件
 - 📱 **外部打开支持**：可从文件管理器直接打开 APNG 文件
 
+## 🏗️ 项目架构
+
+[![APNG 阅览器架构图](docs/architecture.svg)](docs/architecture.html)
+
+> 🖱️ 点击上图可打开**可交互架构图**（支持缩放/搜索/聚焦/明暗主题/路线追踪）。
+
+| 层 | 模块 | 说明 |
+|------|------|------|
+| 🖥️ 表现层 | `HomePage` / `ViewerPage` / `ConvertPage` | 文件选择、逐帧播放控制、图片↔APNG 互转 |
+| ⚙️ 逻辑层 | `ApngDecoder` / `ApngPlayer` / `ApngEncoder` / `ApngConverter` / `FileGateway` | 纯 Dart：解码（PNG 压缩帧存储）、帧调度、编码、跨平台文件网关 |
+| 🔌 平台桥 | `MainActivity.kt` (SAF) / `AppDelegate.swift` (PHPicker) | Android 系统文档选择器 / iOS 原生图片选择器 |
+
 ## 📦 安装包
 
 最新安装包位于 `Download/APNG/` 目录：
