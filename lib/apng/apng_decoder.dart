@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:isolate';
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 /// APNG 文件信息
@@ -193,7 +194,7 @@ class ApngDecoder {
       }
 
       // loopCount：acTL 的 num_plays（0 = 无限循环）
-      final loopCount = info is img.PngInfo ? info.repeat : 0;
+      final loopCount = pngInfo.repeat;
 
       return ApngDecodeResult(
         frames: out,
