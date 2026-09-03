@@ -30,11 +30,17 @@ class FileGateway {
     if (_useAndroidSaf) {
       return _channel.invokeMethod<String>('pickApngFile');
     }
-    // iOS 上 FileType.image 映射 UTType.image，.apng 不在系统已知图片类型中，
-    // 文档选择器会把 .apng 置灰/过滤掉 → 必须用自定义扩展名
+    // iOS 注意事项：
+    // - 不能把 'apng' 放进 allowedExtensions：.apng 未在系统注册，
+    //   file_picker 会为它生成动态 UTType(dyn.*)，导致 UIDocumentPicker
+    //   过滤失效 → 变成"文件选择器"且图片选不中。
+    // - 只放系统已知图片扩展名，过滤条件全是有效 public.image 子类型，
+    //   选择器会正确显示为"图片选择"。
+    // - .apng 文件本身 conforms to public.png（见 Info.plist
+    //   UTExportedTypeDeclarations），因此也能被选中。
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['apng', 'png'],
+      allowedExtensions: const ['png', 'jpg', 'jpeg', 'webp', 'gif', 'heic', 'heif'],
       dialogTitle: '选择 APNG 图片',
     );
     final path = result?.files.single.path;
@@ -47,10 +53,12 @@ class FileGateway {
       final result = await _channel.invokeMethod<List<dynamic>>('pickImages');
       return result?.map((e) => e as String).toList();
     }
+    // 同 pickApngFile：只放系统已知图片扩展名，避免动态 UTType 导致
+    // UIDocumentPicker 降级为文件选择器。
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: [
-        'png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'apng'
+      allowedExtensions: const [
+        'png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'heic', 'heif'
       ],
       allowMultiple: true,
       dialogTitle: '选择图片',
