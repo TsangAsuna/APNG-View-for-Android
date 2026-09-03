@@ -109,7 +109,7 @@ class FileGateway {
       }
     }
 
-    final path = await FilePicker.platform.saveFile(
+    final path = await FilePicker.saveFile(
       fileName: name,
       bytes: data,
     );
