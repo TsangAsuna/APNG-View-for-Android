@@ -26,6 +26,24 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- 声明应用可打开的文件类型（Filza/文件 App "Open in" 菜单识别） -->
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>APNG Animation</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Owner</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>com.apngviewer.apng</string>
+				<string>public.png</string>
+				<string>public.image</string>
+			</array>
+		</dict>
+	</array>
 	<!-- 注册 .apng 为图片类型（conforms to public.png / public.image），
 	     使系统文档选择器能识别并选中 APNG 文件 -->
 	<key>UTExportedTypeDeclarations</key>

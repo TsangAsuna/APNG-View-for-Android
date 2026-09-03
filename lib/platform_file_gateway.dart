@@ -46,6 +46,16 @@ class FileGateway {
     return (path != null && path.isNotEmpty) ? path : null;
   }
 
+  /// iOS：从「文件」App 选择原始 .apng/.png 文件（保真，动画不丢）。
+  /// Android 走 SAF 的 pickApngFile 即可，无需此方法。
+  static Future<String?> pickApngFileFromFiles() async {
+    if (_useAndroidSaf) {
+      return pickApngFile();
+    }
+    final path = await _iosPickerChannel.invokeMethod<String>('openDocument');
+    return (path != null && path.isNotEmpty) ? path : null;
+  }
+
   /// 多选图片，返回路径列表；取消返回 null。
   static Future<List<String>?> pickImages() async {
     if (_useAndroidSaf) {

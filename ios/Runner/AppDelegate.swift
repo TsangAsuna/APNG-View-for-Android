@@ -5,6 +5,9 @@ import UniformTypeIdentifiers
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
+  // Filza / 文件 App "Open in" 分享进来的 APNG 文件路径（复制到 tmp 后交给 Dart）
+  private var sharedFilePath: String?
+
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
@@ -12,9 +15,49 @@ import UniformTypeIdentifiers
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
+  /// Filza / 文件 App "Open in" 本应用时回调：把文件复制到 tmp 并通知 Dart
+  override func application(
+    _ app: UIApplication,
+    open url: URL,
+    options: [UIApplication.OpenURLOptionsKey: Any] = [:]
+  ) -> Bool {
+    guard url.isFileURL else { return false }
+    let dest = FileManager.default.temporaryDirectory
+      .appendingPathComponent("shared_\(UUID().uuidString)_\(url.lastPathComponent)")
+    do {
+      try FileManager.default.copyItem(at: url, to: dest)
+      sharedFilePath = dest.path
+      // Dart 端在启动/回到前台时通过 getPendingFile 拉取
+      return true
+    } catch {
+      return false
+    }
+  }
+
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
     registerImagePickerChannel(engineBridge.pluginRegistry)
+    registerIntentChannel(engineBridge.pluginRegistry)
+  }
+
+  /// 注册 intent 通道：Dart 主动拉取外部打开的文件（Filza "Open in"）
+  private func registerIntentChannel(_ registry: FlutterPluginRegistry) {
+    guard let registrar = registry.registrar(forPlugin: "ApngSharedFile") else {
+      return
+    }
+    let channel = FlutterMethodChannel(
+      name: "com.apngviewer.apng_viewer/intent",
+      binaryMessenger: registrar.messenger()
+    )
+    channel.setMethodCallHandler { [weak self] call, result in
+      guard call.method == "getPendingFile" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      let path = self?.sharedFilePath
+      self?.sharedFilePath = nil // 取走后清空，避免重复打开
+      result(path)
+    }
   }
 
   /// 注册 iOS 原生图片选择通道（PHPicker），供 Dart 端调用
@@ -46,6 +89,11 @@ import UniformTypeIdentifiers
           } else {
             result(nil)
           }
+        }
+      case "openDocument":
+        // 从「文件」App 选原始 .apng/.png 文件（保真，动画不丢）
+        self.presentDocumentPicker { path in
+          result(path)
         }
       case "saveFileDialog":
         // iOS 系统「存储」对话框（UIDocumentPicker 导出到「文件」App）
@@ -137,6 +185,29 @@ import UniformTypeIdentifiers
       return true
     } catch {
       return false
+    }
+  }
+
+  /// 弹出 iOS 原生「文件」选择器：选原始 .apng/.png 文件（保真，动画不丢）
+  private func presentDocumentPicker(completion: @escaping (String?) -> Void) {
+    guard let topVC = topViewController() else {
+      completion(nil)
+      return
+    }
+    DispatchQueue.main.async {
+      // 声明可选的类型：APNG（自定义 UTType，已注册）+ PNG + 图片
+      let apngType = UTType(filenameExtension: "apng") ?? UTType.png
+      var types = [apngType, UTType.png]
+      if let imageType = UTType("public.image") {
+        types.append(imageType)
+      }
+      let picker = UIDocumentPickerViewController(
+        forOpeningContentTypes: types, asCopy: true)
+      let handler = OpenDocumentHandler(completion: completion)
+      objc_setAssociatedObject(picker, &OpenDocumentHandler.assocKey, handler,
+                               .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+      picker.delegate = handler
+      topVC.present(picker, animated: true)
     }
   }
 
@@ -305,5 +376,39 @@ class ImagePickerHandler: NSObject, PHPickerViewControllerDelegate {
         self.completion(self.results.isEmpty ? nil : self.results)
       }
     }
+  }
+}
+
+/// 「文件」App 选择回调：把选中的 .apng/.png 复制到 tmp，返回可读路径
+class OpenDocumentHandler: NSObject, UIDocumentPickerDelegate {
+  static var assocKey = "OpenDocumentHandlerKey"
+
+  private let completion: (String?) -> Void
+
+  init(completion: @escaping (String?) -> Void) {
+    self.completion = completion
+  }
+
+  func documentPicker(
+    _ controller: UIDocumentPickerViewController,
+    didPickDocumentsAt urls: [URL]
+  ) {
+    guard let url = urls.first, url.isFileURL else {
+      completion(nil)
+      return
+    }
+    // 保留原始扩展名（.apng 或 .png），解码器按扩展名判断格式
+    let dest = FileManager.default.temporaryDirectory
+      .appendingPathComponent("picker_\(UUID().uuidString).\(url.pathExtension)")
+    do {
+      try FileManager.default.copyItem(at: url, to: dest)
+      completion(dest.path)
+    } catch {
+      completion(nil)
+    }
+  }
+
+  func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+    completion(nil)
   }
 }

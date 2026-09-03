@@ -97,7 +97,7 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   final List<Map<String, String>> _recentFiles = [];
   final bool _loading = false;
   MethodChannel? _intentChannel;
@@ -107,15 +107,29 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _intentChannel =
         const MethodChannel('com.apngviewer.apng_viewer/intent');
     _loadPrefs();
     _checkIntent();
   }
 
-  /// 检查外部通过文件管理器打开 APNG（仅 Android 有 intent 通道）
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// 从 Filza/文件 App "Open in" 回到前台时，重新检查待打开的文件
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkIntent();
+    }
+  }
+
+  /// 检查外部通过文件管理器打开 APNG（Android intent / iOS Filza "Open in"）
   Future<void> _checkIntent() async {
-    if (!Platform.isAndroid) return;
     try {
       final path = await _intentChannel!.invokeMethod<String>('getPendingFile');
       if (path != null && path.isNotEmpty && File(path).existsSync()) {
@@ -163,6 +177,22 @@ class _HomePageState extends State<HomePage> {
   Future<void> _pickAndOpen() async {
     try {
       final path = await FileGateway.pickApngFile();
+      if (path != null && path.isNotEmpty && File(path).existsSync()) {
+        _openFile(path);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('无法打开文件选择器: $e')),
+      );
+    }
+  }
+
+  /// 从「文件」App 选择原始 .apng/.png 文件打开
+  /// （iOS 相册会转码 APNG 丢动画，走文件选择器才能保真）
+  Future<void> _pickAndOpenFiles() async {
+    try {
+      final path = await FileGateway.pickApngFileFromFiles();
       if (path != null && path.isNotEmpty && File(path).existsSync()) {
         _openFile(path);
       }
@@ -307,6 +337,24 @@ class _HomePageState extends State<HomePage> {
                   ),
                   icon: const Icon(Icons.folder_open),
                   label: const Text('阅览图片',
+                      style:
+                          TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: _pickAndOpenFiles,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.white.withValues(alpha: 0.9),
+                    foregroundColor: const Color(0xFF0288D1),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 14),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                  ),
+                  icon: const Icon(Icons.folder_special),
+                  label: const Text('从文件打开',
                       style:
                           TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
                 ),
