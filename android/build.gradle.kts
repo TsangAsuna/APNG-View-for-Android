@@ -25,9 +25,12 @@ tasks.register<Delete>("clean") {
 
 
 subprojects {
-    plugins.withId("com.android.library") {
-        extensions.configure<com.android.build.gradle.LibraryExtension> {
-            compileSdk = 36
-        }
+    // 强制所有 Android 插件模块使用 compileSdk 36。
+    // 必须在 afterEvaluate 中设置：plugins.withId 回调早于插件自身
+    // android{} 块执行，会被插件内 compileSdk=34 覆盖，导致
+    // :file_picker 等插件 AAR 元数据检查失败（需要 ≥36）。
+    afterEvaluate {
+        extensions.findByType(com.android.build.gradle.LibraryExtension::class.java)
+            ?.compileSdk = 36
     }
 }
