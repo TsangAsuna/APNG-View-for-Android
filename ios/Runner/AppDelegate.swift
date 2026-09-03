@@ -77,7 +77,7 @@ import UniformTypeIdentifiers
 
   /// 弹出 iOS 系统「存储」对话框（导出到「文件」App）
   private func presentSaveDialog(fileName: String, data: Data, completion: @escaping (Bool) -> Void) {
-    guard let rootVC = window?.rootViewController else {
+    guard let topVC = topViewController() else {
       completion(false)
       return
     }
@@ -94,7 +94,7 @@ import UniformTypeIdentifiers
       let handler = SaveExportHandler(fileURL: tmp, completion: completion)
       objc_setAssociatedObject(picker, &SaveExportHandler.assocKey, handler, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
       picker.delegate = handler
-      rootVC.present(picker, animated: true)
+      topVC.present(picker, animated: true)
     }
   }
 
@@ -120,7 +120,7 @@ import UniformTypeIdentifiers
 
   /// 弹出 iOS 原生图片选择器（PHPickerViewController）
   private func presentImagePicker(multiple: Bool, completion: @escaping ([String]?) -> Void) {
-    guard let rootVC = window?.rootViewController else {
+    guard let topVC = topViewController() else {
       completion(nil)
       return
     }
@@ -133,8 +133,24 @@ import UniformTypeIdentifiers
       // 通过关联对象持有 handler，防止提前释放导致回调丢失
       objc_setAssociatedObject(picker, &ImagePickerHandler.assocKey, handler, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
       picker.delegate = handler
-      rootVC.present(picker, animated: true)
+      topVC.present(picker, animated: true)
     }
+  }
+
+  /// 获取当前可 present 的顶层控制器。
+  /// 注意：不能用 self.window（Scene 生命周期下 Flutter 隐式引擎的
+  /// window 可能尚未挂载 rootViewController），必须从活跃 Scene 取。
+  private func topViewController() -> UIViewController? {
+    let activeScene = UIApplication.shared.connectedScenes
+      .compactMap { $0 as? UIWindowScene }
+      .first { $0.activationState == .foregroundActive }
+    let window = activeScene?.windows.first { $0.isKeyWindow }
+      ?? activeScene?.windows.first
+    var top = window?.rootViewController
+    while let presented = top?.presentedViewController {
+      top = presented
+    }
+    return top
   }
 }
 
