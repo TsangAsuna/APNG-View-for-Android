@@ -299,10 +299,12 @@ class ImagePickerHandler: NSObject, PHPickerViewControllerDelegate {
 
   /// 从 NSItemProvider 读取图片数据并统一转为标准 PNG 写入 tmp。
   ///
-  /// 关键: 相册图片在 iPhone/iPad 上默认是 HEIC 编码, 纯 Dart 解码器
-  /// 不支持 HEIC。这里用系统 UIImage 统一转码:
-  /// - 真实 PNG/APNG(魔数 89504E47)→ 保留原始字节, 动画不丢
-  /// - HEIC/JPEG/其他 → UIImage 解码后 pngData() 转成标准 PNG
+  /// 策略（保真优先）：
+  /// 1. 优先 loadFileRepresentation 拿原始文件（若是 APNG 且相册保留原件，
+  ///    动画 chunk 不丢）；
+  /// 2. 失败/无文件表示时回退 loadDataRepresentation；
+  /// 3. 拿到字节后统一处理：PNG/APNG(魔数 89504E47) 原样保留，
+  ///    HEIC/JPEG 等其他格式用 UIImage 转码为标准 PNG。
   private func loadItem(_ pickerResult: PHPickerResult) {
     let provider = pickerResult.itemProvider
     let pngType = UTType.png.identifier
@@ -314,10 +316,26 @@ class ImagePickerHandler: NSObject, PHPickerViewControllerDelegate {
       }
     }
 
+    let loadFile: (String) -> Void = { [weak self] typeId in
+      provider.loadFileRepresentation(forTypeIdentifier: typeId) { url, error in
+        guard let url = url, error == nil else {
+          // 拿不到原始文件（如 iCloud 占位），回退数据加载
+          loadData(typeId)
+          return
+        }
+        do {
+          let data = try Data(contentsOf: url)
+          self?.processData(data, error: nil)
+        } catch {
+          loadData(typeId)
+        }
+      }
+    }
+
     if provider.hasItemConformingToTypeIdentifier(pngType) {
-      loadData(pngType)
+      loadFile(pngType)
     } else if provider.hasItemConformingToTypeIdentifier(imageType) {
-      loadData(imageType)
+      loadFile(imageType)
     } else {
       finishOne(nil)
     }

@@ -84,21 +84,20 @@ class FileGateway {
 
   /// 写出导出文件。
   ///
-  /// Android：自定义目录走 SAF writeToDirectory，否则弹系统保存对话框。
-  /// iOS：自定义目录写入应用文稿目录 APNG_Exporter/；否则弹系统
-  /// 「存储」对话框（原生 UIDocumentPicker）。
-  /// 注意：iOS 的导出对话框按扩展名匹配文件类型，.apng 不是系统已知
-  /// UTType，会弹不出有效选项，因此导出时统一落为 .png（APNG 本身就是
-  /// 合法的 PNG，扩展名改为 .png 不影响动画数据与兼容性）。
+  /// [keepOriginal] 为 true 时保留原始文件名与字节（用于"保存原文件"，
+  /// 导出的 APNG 保持动画与原始大小）；默认 false 时按历史行为把
+  /// .apng 统一落为 .png（APNG 本身是合法 PNG，动画数据不丢）。
   static Future<bool> writeExport({
     required String fileName,
     required String mime,
     required Uint8List data,
     required bool useCustomDir,
+    bool keepOriginal = false,
   }) async {
-    // .apng 扩展名系统不识别，统一导出为 .png
     var name = fileName;
-    if (name.toLowerCase().endsWith('.apng')) {
+    if (!keepOriginal && name.toLowerCase().endsWith('.apng')) {
+      // iOS 导出对话框按扩展名匹配 UTType，.apng 不是系统已知类型会弹不出选项；
+      // APNG 是合法 PNG，改名 .png 不影响动画数据与兼容性。
       name = '${name.substring(0, name.length - 5)}.png';
     }
 

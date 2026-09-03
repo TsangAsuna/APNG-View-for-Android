@@ -82,6 +82,33 @@ class _ViewerPageState extends State<ViewerPage> {
     }
   }
 
+  /// 保存原始 APNG 文件（保留动画与原始字节，不转码不压缩）
+  Future<void> _saveOriginalFile() async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    try {
+      final bytes = await File(widget.path).readAsBytes();
+      final ok = await FileGateway.writeExport(
+        fileName: widget.fileName,
+        mime: 'image/apng',
+        data: bytes,
+        useCustomDir: false,
+        keepOriginal: true,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(ok ? '已保存原文件' : '保存已取消')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('保存失败: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
   @override
   void dispose() {
     _player?.dispose();
@@ -100,6 +127,11 @@ class _ViewerPageState extends State<ViewerPage> {
               title: Text(widget.fileName,
                   maxLines: 1, overflow: TextOverflow.ellipsis),
               actions: [
+                IconButton(
+                  icon: const Icon(Icons.save_alt),
+                  tooltip: '保存原文件（完整动画）',
+                  onPressed: _saving ? null : _saveOriginalFile,
+                ),
                 IconButton(
                   icon: const Icon(Icons.fullscreen),
                   tooltip: '全屏',
