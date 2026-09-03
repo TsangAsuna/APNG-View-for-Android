@@ -13,6 +13,12 @@ class ApngPlayer extends ChangeNotifier {
   Timer? _timer;
   final Stopwatch _frameWatch = Stopwatch();
 
+  /// 已完整播放的循环轮数（用于 loopCount 停止）
+  int _completedLoops = 0;
+
+  /// 播放累计时间（毫秒），供时间进度计算
+  int _playedMs = 0;
+
   ApngPlayer(this.result);
 
   int get frameCount => result?.frames.length ?? 0;
@@ -50,6 +56,8 @@ class ApngPlayer extends ChangeNotifier {
   void stop() {
     pause();
     _currentFrame = 0;
+    _completedLoops = 0;
+    _playedMs = 0;
     notifyListeners();
   }
 
@@ -57,7 +65,7 @@ class ApngPlayer extends ChangeNotifier {
     _timer?.cancel();
     _timer = null;
     if (frameCount > 0) {
-      _currentFrame = (_currentFrame + 1) % frameCount;
+      _advanceFrame(1);
     }
     if (_playing) {
       _scheduleNext();
@@ -69,7 +77,7 @@ class ApngPlayer extends ChangeNotifier {
     _timer?.cancel();
     _timer = null;
     if (frameCount > 0) {
-      _currentFrame = (_currentFrame - 1 + frameCount) % frameCount;
+      _advanceFrame(-1);
     }
     if (_playing) {
       _scheduleNext();
@@ -79,7 +87,9 @@ class ApngPlayer extends ChangeNotifier {
 
   void gotoFrame(int index) {
     if (frameCount == 0) return;
-    _currentFrame = index.clamp(0, frameCount - 1);
+    final target = index.clamp(0, frameCount - 1).toInt();
+    _currentFrame = target;
+    _playedMs = _elapsedUpTo(target);
     if (_playing) {
       _timer?.cancel();
       _scheduleNext();
@@ -99,6 +109,36 @@ class ApngPlayer extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 按方向推进一帧，并处理 loopCount 边界
+  void _advanceFrame(int delta) {
+    final n = frameCount;
+    if (n == 0) return;
+    var next = _currentFrame + delta;
+    if (next >= n) {
+      // 正向越界 → 完成一轮循环
+      _completedLoops++;
+      next = 0;
+    } else if (next < 0) {
+      next = n - 1;
+    }
+    _currentFrame = next;
+    _playedMs = _elapsedUpTo(next);
+  }
+
+  int _elapsedUpTo(int index) {
+    var ms = 0;
+    for (var i = 0; i < index && i < frameCount; i++) {
+      ms += result!.frames[i].durationMs;
+    }
+    return ms;
+  }
+
+  /// 是否已达到有限循环次数（loopCount>0 时播放指定轮数后停止）
+  bool get _loopFinished {
+    final loop = result?.loopCount ?? 0;
+    return loop > 0 && _completedLoops >= loop;
+  }
+
   void _scheduleNext() {
     _timer?.cancel();
     final frame = currentFrameData;
@@ -113,15 +153,43 @@ class ApngPlayer extends ChangeNotifier {
       ..start();
     _timer = Timer(Duration(milliseconds: delayMs), () {
       _frameWatch.stop();
+      // 用实际耗时补偿 Timer 漂移（iOS RunLoop 低功耗/滚动时会延迟）
+      final elapsed = _frameWatch.elapsedMilliseconds;
+      _playedMs += elapsed;
+
+      if (frameCount == 0) return;
+
+      if (_currentFrame == frameCount - 1) {
+        // 到达末帧，先尝试循环轮次推进
+        _completedLoops++;
+        if (_loopFinished) {
+          _playing = false;
+          _timer = null;
+          notifyListeners();
+          return;
+        }
+      }
       _currentFrame = (_currentFrame + 1) % frameCount;
+      if (_currentFrame == 0) {
+        _playedMs = 0;
+      }
       notifyListeners();
       _scheduleNext();
     });
   }
 
+  /// 时间进度（0.0 ~ 1.0），基于累计播放时间 / 总时长，帧时长不均匀也匀速
+  double get progress {
+    final total = result?.totalDurationMs ?? 0;
+    if (total <= 0 || frameCount <= 1) return 0;
+    return (_playedMs % total) / total;
+  }
+
   /// 剩余毫秒估计（进度条用）
-  double get progress =>
-      frameCount == 0 ? 0 : (_currentFrame + 1) / frameCount;
+  int get remainingMs {
+    final total = result?.totalDurationMs ?? 0;
+    return (total - (_playedMs % total)).clamp(0, total).toInt();
+  }
 
   @override
   void dispose() {

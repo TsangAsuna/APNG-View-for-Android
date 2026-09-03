@@ -1,9 +1,7 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:image/image.dart' as img;
 import 'package:photo_view/photo_view.dart';
 
 import 'apng/apng_decoder.dart';
@@ -108,7 +106,13 @@ class _ViewerPageState extends State<ViewerPage> {
           if (_player == null) {
             _player = ApngPlayer(result);
             if (result.isAnimated) {
-              _player!.play();
+              // 不能在 build 期间直接 play()（会触发 markNeedsBuild during build，
+              // iOS 上表现为首帧渲染异常/白屏），延后到本帧绘制完成后再播放。
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted && _player != null) {
+                  _player!.play();
+                }
+              });
             }
           }
 
@@ -130,8 +134,10 @@ class _ViewerPageState extends State<ViewerPage> {
 
   Widget _buildViewer(ApngDecodeResult result) {
     if (!result.isAnimated) {
+      // 第一帧已经是压缩后的 PNG 字节，直接交给引擎解码，
+      // 避免在 UI 线程同步 encodePng 卡死界面（大图时尤为严重）
       return PhotoView(
-        imageProvider: MemoryImage(getFirstFrameBytes(result)),
+        imageProvider: MemoryImage(result.frames.first.pngBytes),
         backgroundDecoration: const BoxDecoration(color: Colors.black),
         minScale: PhotoViewComputedScale.contained,
         maxScale: PhotoViewComputedScale.covered * 4,
@@ -149,25 +155,12 @@ class _ViewerPageState extends State<ViewerPage> {
           maxScale: 8.0,
           child: Center(
             child: ApngFrameView(
-              rgbaBytes: f.rgbaBytes,
-              width: f.width,
-              height: f.height,
+              pngBytes: f.pngBytes,
             ),
           ),
         );
       },
     );
-  }
-
-  Uint8List getFirstFrameBytes(ApngDecodeResult result) {
-    final f = result.frames.first;
-    img.Image im = img.Image.fromBytes(
-      width: f.width,
-      height: f.height,
-      bytes: f.rgbaBytes.buffer,
-      numChannels: 4,
-    );
-    return img.encodePng(im);
   }
 
   Widget _buildControlBar(ApngDecodeResult result) {
@@ -201,9 +194,14 @@ class _ViewerPageState extends State<ViewerPage> {
                                 overlayRadius: 12),
                           ),
                           child: Slider(
-                            value: _player!.currentFrame.toDouble(),
+                            // 用时间进度驱动，帧时长不均匀时进度条也匀速
+                            value: (_player!.progress *
+                                    (_player!.frameCount - 1))
+                                .clamp(0, _player!.frameCount - 1),
                             max: (_player!.frameCount - 1).toDouble(),
-                            onChanged: (v) => _player!.gotoFrame(v.round()),
+                            onChanged: (v) {
+                              _player!.gotoFrame(v.round());
+                            },
                           ),
                         ),
                       ),
@@ -290,8 +288,7 @@ class _ViewerPageState extends State<ViewerPage> {
   }
 
   String _formatDuration(ApngDecodeResult result) {
-    final totalMs =
-        result.frames.fold<int>(0, (sum, f) => sum + f.durationMs);
+    final totalMs = result.totalDurationMs;
     final sec = (totalMs / 1000).toStringAsFixed(1);
     return '时长 ${sec}s';
   }

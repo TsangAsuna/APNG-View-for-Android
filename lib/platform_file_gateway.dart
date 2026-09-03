@@ -30,8 +30,11 @@ class FileGateway {
     if (_useAndroidSaf) {
       return _channel.invokeMethod<String>('pickApngFile');
     }
+    // iOS 上 FileType.image 映射 UTType.image，.apng 不在系统已知图片类型中，
+    // 文档选择器会把 .apng 置灰/过滤掉 → 必须用自定义扩展名
     final result = await FilePicker.platform.pickFiles(
-      type: FileType.image,
+      type: FileType.custom,
+      allowedExtensions: ['apng', 'png'],
       dialogTitle: '选择 APNG 图片',
     );
     final path = result?.files.single.path;
@@ -45,7 +48,10 @@ class FileGateway {
       return result?.map((e) => e as String).toList();
     }
     final result = await FilePicker.platform.pickFiles(
-      type: FileType.image,
+      type: FileType.custom,
+      allowedExtensions: [
+        'png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'apng'
+      ],
       allowMultiple: true,
       dialogTitle: '选择图片',
     );
