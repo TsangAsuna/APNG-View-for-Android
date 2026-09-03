@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'apng/apng_decoder.dart';
 import 'convert_page.dart';
 import 'platform_file_gateway.dart';
 import 'viewer_page.dart';
@@ -100,7 +99,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final List<Map<String, String>> _recentFiles = [];
-  bool _loading = false;
+  final bool _loading = false;
   MethodChannel? _intentChannel;
 
   static const _prefsKey = 'recent_apng_files';
