@@ -79,7 +79,17 @@ class _ViewerPageState extends State<ViewerPage> {
         future: _future,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('正在解码 APNG… 大图可能需要几秒',
+                      style: TextStyle(color: Colors.white70, fontSize: 13)),
+                ],
+              ),
+            );
           }
           final result = snapshot.data;
           if (result == null) {

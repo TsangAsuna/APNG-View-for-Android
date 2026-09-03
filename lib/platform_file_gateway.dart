@@ -9,17 +9,16 @@ import 'package:path_provider/path_provider.dart';
 /// Android：沿用 MainActivity.kt 里的 SAF 通道，行为与历史版本完全一致
 /// （返回真实路径或缓存副本路径、目录树持久授权、系统保存对话框）。
 ///
-/// iOS：仓库里没有 ios/ 目录（IPA 由 CI 用 flutter create 现生成 Runner），
-/// 不便注入原生代码，因此选择用 file_picker 的系统文档选择器实现：
-///  - 选择：UIDocumentPicker（从「文件」App / iCloud Drive 选图，无需任何
-///    Info.plist 权限声明，插件会拷贝出可读的临时路径）；
-///  - 单文件导出：系统「存储」对话框（file_picker saveFile + bytes）；
-///  - 批量导出（自定义目录模式）：iOS 沙盒不允许持久写入任意外部目录，
-///    改为写入应用文稿目录 APNG_Exporter/（可在「文件」App 中访问）。
+/// iOS：图片选择走 AppDelegate 注册的原生 PHPicker 通道（系统相册风格
+/// 图片选择器，非文件列表）；导出走 file_picker 系统存储对话框。
 class FileGateway {
   FileGateway._();
 
   static const _channel = MethodChannel('com.apngviewer.apng_viewer/file');
+
+  /// iOS 原生 PHPicker 通道（AppDelegate.swift 注册）
+  static const _iosPickerChannel =
+      MethodChannel('com.apngviewer.apng_viewer/ios_picker');
 
   static bool get _useAndroidSaf => Platform.isAndroid;
 
@@ -30,20 +29,8 @@ class FileGateway {
     if (_useAndroidSaf) {
       return _channel.invokeMethod<String>('pickApngFile');
     }
-    // iOS 注意事项：
-    // - 不能把 'apng' 放进 allowedExtensions：.apng 未在系统注册，
-    //   file_picker 会为它生成动态 UTType(dyn.*)，导致 UIDocumentPicker
-    //   过滤失效 → 变成"文件选择器"且图片选不中。
-    // - 只放系统已知图片扩展名，过滤条件全是有效 public.image 子类型，
-    //   选择器会正确显示为"图片选择"。
-    // - .apng 文件本身 conforms to public.png（见 Info.plist
-    //   UTExportedTypeDeclarations），因此也能被选中。
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: const ['png', 'jpg', 'jpeg', 'webp', 'gif', 'heic', 'heif'],
-      dialogTitle: '选择 APNG 图片',
-    );
-    final path = result?.files.single.path;
+    // iOS：原生 PHPicker（系统图片选择器，相册/最近项目网格）
+    final path = await _iosPickerChannel.invokeMethod<String>('pickApngFile');
     return (path != null && path.isNotEmpty) ? path : null;
   }
 
@@ -53,17 +40,12 @@ class FileGateway {
       final result = await _channel.invokeMethod<List<dynamic>>('pickImages');
       return result?.map((e) => e as String).toList();
     }
-    // 同 pickApngFile：只放系统已知图片扩展名，避免动态 UTType 导致
-    // UIDocumentPicker 降级为文件选择器。
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: const [
-        'png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'heic', 'heif'
-      ],
-      allowMultiple: true,
-      dialogTitle: '选择图片',
-    );
-    final paths = result?.paths.whereType<String>().toList() ?? const [];
+    // iOS：原生 PHPicker，多选
+    final result =
+        await _iosPickerChannel.invokeMethod<List<dynamic>>('pickImages', {
+      'multiple': true,
+    });
+    final paths = result?.whereType<String>().toList() ?? const [];
     return paths.isEmpty ? null : paths;
   }
 

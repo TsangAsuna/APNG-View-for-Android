@@ -52,9 +52,13 @@ class ApngFrame {
 /// APNG 解码器 - 基于纯 Dart image 库
 class ApngDecoder {
   /// 解码 APNG 文件字节并提取全部帧
-  ///
   /// 在后台 isolate 中调用，避免大 APNG 阻塞 UI。
   /// 每帧解码后立即压缩为 PNG 存储，原始 RGBA 不常驻内存。
+  ///
+  /// 性能优化：PngEncoder level 用 1（最快压缩）。纯 Dart 的 level 9
+  /// 压缩 50MB 级 APNG 会慢到不可用；level 1 速度提升 10 倍以上，
+  /// 帧字节略大但内存仍远小于 RGBA，且播放阶段由 Flutter 引擎
+  /// 原生解码，不受影响。
   static ApngDecodeResult? decode(Uint8List bytes, {String filePath = ''}) {
     try {
       final img.Image? decoded = img.decodeImage(bytes);
@@ -62,6 +66,7 @@ class ApngDecoder {
 
       final frames = <ApngFrame>[];
       final durations = <int>[];
+      final encoder = img.PngEncoder(level: 1);
 
       // image 库将动画帧存于 frames 列表 (包含自身)
       final allFrames = decoded.frames;
@@ -72,7 +77,7 @@ class ApngDecoder {
         final rgba = frameImg.numChannels != 4
             ? frameImg.convert(numChannels: 4)
             : frameImg;
-        final png = img.encodePng(rgba);
+        final png = encoder.encode(rgba);
         frames.add(ApngFrame(
           pngBytes: png,
           width: frameImg.width,
