@@ -72,7 +72,8 @@ class _ConvertPageState extends State<ConvertPage>
       if (result == null || result.isEmpty) return;
       setState(() => _converting = true);
       // 后台 isolate 解码，进度条不卡顿
-      final images = await compute(_decodeImagesWorker, result);
+      final images = await compute(
+          _decodeImagesWorker, result.map((e) => e as String).toList());
       if (!mounted) return;
       setState(() {
         _srcImages
@@ -314,10 +315,11 @@ class _ConvertPageState extends State<ConvertPage>
       var count = 0;
       for (var i = 0; i < result.frames.length; i++) {
         final png = _encodeFramePng(result.frames[i]);
-        final ok = await _writeFile(
+        final ok = await FileGateway.writeExport(
           fileName: '${_baseName()}_frame_${i + 1}.png',
           mime: 'image/png',
           data: png,
+          useCustomDir: true,
         );
         if (ok) count++;
       }
@@ -959,6 +961,7 @@ class _SelectableImageTileState extends State<_SelectableImageTile>
                     ),
                   ),
                 ),
+              ),
               ),
           ],
         ),
