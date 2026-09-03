@@ -1,6 +1,7 @@
 import Flutter
 import UIKit
 import PhotosUI
+import UniformTypeIdentifiers
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
@@ -13,11 +14,14 @@ import PhotosUI
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
-    registerImagePickerChannel(engineBridge.applicationRegistrar)
+    registerImagePickerChannel(engineBridge.pluginRegistry)
   }
 
   /// 注册 iOS 原生图片选择通道（PHPicker），供 Dart 端调用
-  private func registerImagePickerChannel(_ registrar: FlutterPluginRegistrar) {
+  private func registerImagePickerChannel(_ registry: FlutterPluginRegistry) {
+    guard let registrar = registry.registrar(forPlugin: "ApngImagePicker") else {
+      return
+    }
     let channel = FlutterMethodChannel(
       name: "com.apngviewer.apng_viewer/ios_picker",
       binaryMessenger: registrar.messenger()
@@ -91,31 +95,31 @@ class ImagePickerHandler: NSObject, PHPickerViewControllerDelegate {
 
     cancelled = false
     pending = results.count
-    for (index, pickerResult) in results.enumerated() {
-      loadItem(pickerResult, index: index)
+    for pickerResult in results {
+      loadItem(pickerResult)
     }
   }
 
   /// 从 NSItemProvider 读取原始文件数据（APNG 以 .png 结尾可被识别为 PNG）
-  private func loadItem(_ pickerResult: PHPickerResult, index: Int) {
+  private func loadItem(_ pickerResult: PHPickerResult) {
     let provider = pickerResult.itemProvider
     let pngType = UTType.png.identifier
     let imageType = UTType.image.identifier
 
     if provider.hasItemConformingToTypeIdentifier(pngType) {
       provider.loadFileRepresentation(forTypeIdentifier: pngType) { [weak self] url, error in
-        self?.handleLoaded(url, error: error, index: index)
+        self?.handleLoaded(url, error: error)
       }
     } else if provider.hasItemConformingToTypeIdentifier(imageType) {
       provider.loadDataRepresentation(forTypeIdentifier: imageType) { [weak self] data, error in
-        self?.handleData(data, error: error, index: index)
+        self?.handleData(data, error: error)
       }
     } else {
       finishOne(nil)
     }
   }
 
-  private func handleLoaded(_ url: URL?, error: Error?, index: Int) {
+  private func handleLoaded(_ url: URL?, error: Error?) {
     guard let url = url, error == nil else {
       finishOne(nil)
       return
@@ -132,7 +136,7 @@ class ImagePickerHandler: NSObject, PHPickerViewControllerDelegate {
     }
   }
 
-  private func handleData(_ data: Data?, error: Error?, index: Int) {
+  private func handleData(_ data: Data?, error: Error?) {
     guard let data = data, error == nil else {
       finishOne(nil)
       return
