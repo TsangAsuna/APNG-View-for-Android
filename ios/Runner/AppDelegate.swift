@@ -47,9 +47,74 @@ import UniformTypeIdentifiers
             result(nil)
           }
         }
+      case "saveFileDialog":
+        // iOS 系统「存储」对话框（UIDocumentPicker 导出到「文件」App）
+        let args = call.arguments as? [String: Any] ?? [:]
+        let name = args["fileName"] as? String ?? "export.png"
+        let data = (args["data"] as? FlutterStandardTypedData)?.data
+        guard let bytes = data else {
+          result(false)
+          return
+        }
+        self.presentSaveDialog(fileName: name, data: bytes) { ok in
+          result(ok)
+        }
+      case "writeToDirectory":
+        // 写入应用文稿目录 APNG_Exporter/
+        let args = call.arguments as? [String: Any] ?? [:]
+        let name = args["fileName"] as? String ?? "export.png"
+        let data = (args["data"] as? FlutterStandardTypedData)?.data
+        guard let bytes = data else {
+          result(false)
+          return
+        }
+        result(self.writeToDocumentsDir(fileName: name, data: bytes))
       default:
         result(FlutterMethodNotImplemented)
       }
+    }
+  }
+
+  /// 弹出 iOS 系统「存储」对话框（导出到「文件」App）
+  private func presentSaveDialog(fileName: String, data: Data, completion: @escaping (Bool) -> Void) {
+    guard let rootVC = window?.rootViewController else {
+      completion(false)
+      return
+    }
+    DispatchQueue.main.async {
+      let tmp = FileManager.default.temporaryDirectory
+        .appendingPathComponent(UUID().uuidString + "_" + fileName)
+      do {
+        try data.write(to: tmp)
+      } catch {
+        completion(false)
+        return
+      }
+      let picker = UIDocumentPickerViewController(forExporting: [tmp], asCopy: true)
+      let handler = SaveExportHandler(fileURL: tmp, completion: completion)
+      objc_setAssociatedObject(picker, &SaveExportHandler.assocKey, handler, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+      picker.delegate = handler
+      rootVC.present(picker, animated: true)
+    }
+  }
+
+  /// 写入应用文稿目录 APNG_Exporter/（「文件」App -> 我的 iPhone 可见）
+  private func writeToDocumentsDir(fileName: String, data: Data) -> Bool {
+    do {
+      let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+      let dir = docs.appendingPathComponent("APNG_Exporter", isDirectory: true)
+      try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+      var target = dir.appendingPathComponent(fileName)
+      if FileManager.default.fileExists(atPath: target.path) {
+        let base = (fileName as NSString).deletingPathExtension
+        let ext = (fileName as NSString).pathExtension
+        let stamp = Int(Date().timeIntervalSince1970 * 1000)
+        target = dir.appendingPathComponent("\(base)_\(stamp).\(ext)")
+      }
+      try data.write(to: target)
+      return true
+    } catch {
+      return false
     }
   }
 
@@ -70,6 +135,29 @@ import UniformTypeIdentifiers
       picker.delegate = handler
       rootVC.present(picker, animated: true)
     }
+  }
+}
+
+/// 导出到「文件」App 后的回调：清理临时文件并返回结果
+class SaveExportHandler: NSObject, UIDocumentPickerDelegate {
+  static var assocKey = "SaveExportHandlerKey"
+
+  private let fileURL: URL
+  private let completion: (Bool) -> Void
+
+  init(fileURL: URL, completion: @escaping (Bool) -> Void) {
+    self.fileURL = fileURL
+    self.completion = completion
+  }
+
+  func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+    try? FileManager.default.removeItem(at: fileURL)
+    completion(true)
+  }
+
+  func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+    try? FileManager.default.removeItem(at: fileURL)
+    completion(false)
   }
 }
 
