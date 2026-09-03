@@ -73,7 +73,7 @@ class _ConvertPageState extends State<ConvertPage>
       setState(() => _converting = true);
       // 后台 isolate 解码，进度条不卡顿
       final images = await compute(
-          _decodeImagesWorker, result.map((e) => e as String).toList());
+          _decodeImagesWorker, result.toList());
       if (!mounted) return;
       setState(() {
         _srcImages
