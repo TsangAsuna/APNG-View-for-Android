@@ -49,7 +49,7 @@ class _ApngViewerAppState extends State<ApngViewerApp> {
   Future<void> _showSaveModeSheet(BuildContext context) async {
     final current = await FileGateway.loadSaveMode();
     if (!mounted) return;
-    final mode = await showModalBottomSheet<FileGateway.SaveMode>(
+    final mode = await showModalBottomSheet<SaveMode>(
       context: context,
       builder: (c) => SafeArea(
         child: Column(
@@ -60,21 +60,21 @@ class _ApngViewerAppState extends State<ApngViewerApp> {
               title: Text('保存方式'),
               subtitle: Text('选择后点击保存不再弹位置选择'),
             ),
-            RadioListTile<FileGateway.SaveMode>(
-              value: FileGateway.SaveMode.dialog,
+            RadioListTile<SaveMode>(
+              value: SaveMode.dialog,
               groupValue: current,
               title: const Text('系统对话框（默认）'),
               onChanged: (v) => Navigator.pop(c, v),
             ),
-            RadioListTile<FileGateway.SaveMode>(
-              value: FileGateway.SaveMode.folder,
+            RadioListTile<SaveMode>(
+              value: SaveMode.folder,
               groupValue: current,
               title: const Text('默认文件夹 APNG_Exporter'),
               subtitle: const Text('「文件」App → 我的 iPhone 可见'),
               onChanged: (v) => Navigator.pop(c, v),
             ),
-            RadioListTile<FileGateway.SaveMode>(
-              value: FileGateway.SaveMode.album,
+            RadioListTile<SaveMode>(
+              value: SaveMode.album,
               groupValue: current,
               title: const Text('保存到相册'),
               onChanged: (v) => Navigator.pop(c, v),
@@ -92,10 +92,10 @@ class _ApngViewerAppState extends State<ApngViewerApp> {
     if (!mounted) return;
     String label;
     switch (mode) {
-      case FileGateway.SaveMode.folder:
+      case SaveMode.folder:
         label = '默认文件夹';
         break;
-      case FileGateway.SaveMode.album:
+      case SaveMode.album:
         label = '相册';
         break;
       default:

@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// 跨平台文件选择 / 导出网关。
 ///
@@ -10,6 +11,9 @@ import 'package:flutter/services.dart';
 ///   - 导出：UIDocumentPicker 系统「存储」对话框 / 应用文稿目录 APNG_Exporter。
 /// 不依赖 file_picker 插件（其 Android 端硬编码 compileSdk 34 与 AGP 9 冲突，
 /// 且 iOS 端底层是文档选择器而非图片选择器）。
+/// 保存方式：dialog=系统对话框 / folder=默认文件夹(APNG_Exporter) / album=相册
+enum SaveMode { dialog, folder, album }
+
 class FileGateway {
   FileGateway._();
 
@@ -36,8 +40,6 @@ class FileGateway {
 
   static bool get _useAndroidSaf => Platform.isAndroid;
 
-  /// 保存方式：dialog=系统对话框 / folder=默认文件夹(APNG_Exporter) / album=相册
-  enum SaveMode { dialog, folder, album }
 
   /// 保存到相册（iOS PhotoKit / Android MediaStore）
   static Future<bool> saveToAlbum({
