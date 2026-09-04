@@ -17,15 +17,16 @@
 
 ## 🏗️ 项目架构
 
-[![APNG 阅览器架构图](docs/architecture.png)](docs/architecture.html)
+[![APNG 阅览器信号流架构](docs/architecture.svg)](docs/architecture.html)
 
-> 🖱️ 点击上图可打开**可交互架构图**（支持缩放/搜索/聚焦/明暗主题/路线追踪）。
+> 🖱️ 点击上图打开**可交互信号流架构图**：鼠标悬停/点击组件可聚焦高亮，支持缩放、搜索、四信号链视图（打开/播放/互转/保存）、明暗主题切换与路线追踪。
 
 | 层 | 模块 | 说明 |
 |------|------|------|
 | 🖥️ 表现层 | `HomePage` / `ViewerPage` / `ConvertPage` | 文件选择、逐帧播放控制、图片↔APNG 互转 |
-| ⚙️ 逻辑层 | `ApngDecoder` / `ApngPlayer` / `ApngEncoder` / `ApngConverter` / `FileGateway` | 纯 Dart：解码（PNG 压缩帧存储）、帧调度、编码、跨平台文件网关 |
-| 🔌 平台桥 | `MainActivity.kt` (SAF) / `AppDelegate.swift` (PHPicker) | Android 系统文档选择器 / iOS 原生图片选择器 |
+| ⚙️ 逻辑层 | `ApngDecoder` / `ApngPlayer` / `ApngEncoder` | 原生优先·Dart 回退解码、Ticker 帧调度、多帧编码 |
+| 🔌 原生桥 | `MainActivity.kt`（线程池解码）/ `AppDelegate.swift`（ImageIO 解码）| 双端原生多核解码，帧文件写 `native_frames` 缓存实现秒开 |
+| 🛡️ 保存护栏 | Dart 30s 超时 + try/finally | 取消保存弹窗必复位按钮，不卡转圈 |
 
 ## 📦 安装包
 

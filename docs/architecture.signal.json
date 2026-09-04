@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "APNG 阅览器 — 信号流架构",
+    "subtitle": "打开 / 播放 / 互转 / 保存 四条信号链（双端原生解码 + 磁盘帧缓存）",
+    "locale": "zh-CN",
+    "output": "docs/architecture.html",
+    "viewBox": [1120, 640],
+    "animation": "trace",
+    "visual_preset": "signal-flow",
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "open-flow", "label": "打开 APNG", "focus": ["user", "home", "native", "frames", "decoder", "viewer"], "note": "选文件 → 原生多核解码 → 帧文件缓存 → Dart 读回渲染。" },
+      { "id": "play-flow", "label": "逐帧播放", "focus": ["viewer", "player"], "note": "Ticker 驱动帧调度，Image.memory 引擎解码显示。" },
+      { "id": "convert-flow", "label": "图片互转", "focus": ["convert", "encoder"], "note": "多图 RGBA → APNG 编码；APNG → 逐帧 PNG 导出。" },
+      { "id": "save-flow", "label": "保存导出", "focus": ["viewer", "save"], "note": "保存当前帧 / 原文件 / 帧序列，系统对话框或自定义目录。" }
+    ]
+  },
+  "components": [
+    { "id": "user", "type": "external", "label": "用户", "sublabel": "触摸 / 手势", "pos": [40, 250], "size": [110, 60] },
+    { "id": "home", "type": "frontend", "label": "HomePage", "sublabel": "首页 / 历史", "pos": [220, 80], "size": [120, 60] },
+    { "id": "viewer", "type": "frontend", "label": "ViewerPage", "sublabel": "播放 / 保存", "pos": [220, 250], "size": [120, 60] },
+    { "id": "convert", "type": "frontend", "label": "ConvertPage", "sublabel": "图片 ↔ APNG", "pos": [220, 420], "size": [120, 60] },
+    { "id": "decoder", "type": "backend", "label": "ApngDecoder", "sublabel": "原生优先 · Dart 回退", "pos": [420, 80], "size": [130, 60] },
+    { "id": "player", "type": "backend", "label": "ApngPlayer", "sublabel": "Ticker 帧调度", "pos": [420, 250], "size": [130, 60] },
+    { "id": "encoder", "type": "backend", "label": "ApngEncoder", "sublabel": "多帧 → APNG", "pos": [420, 420], "size": [130, 60] },
+    { "id": "native", "type": "security", "label": "原生桥", "sublabel": "解码器 / 选择器", "pos": [640, 250], "size": [130, 60] },
+    { "id": "save", "type": "security", "label": "系统保存", "sublabel": "对话框 / 文稿", "pos": [640, 420], "size": [130, 60] },
+    { "id": "frames", "type": "database", "label": "帧文件缓存", "sublabel": "native_frames", "pos": [850, 250], "size": [140, 60] }
+  ],
+  "connections": [
+    { "from": "user", "to": "home", "label": "选择文件", "variant": "emphasis", "fromSide": "right", "toSide": "left", "via": [[180, 280], [180, 110]] },
+    { "from": "home", "to": "native", "label": "pickApngFile", "variant": "emphasis", "fromSide": "top", "toSide": "top", "via": [[280, 16], [705, 16]], "labelAt": [492, 14] },
+    { "from": "native", "to": "frames", "label": "并行解码写帧", "variant": "emphasis", "route": "straight" },
+    { "from": "frames", "to": "decoder", "label": "帧路径", "variant": "dashed", "fromSide": "bottom", "toSide": "right", "via": [[920, 400], [570, 400], [570, 110]], "labelAt": [740, 400] },
+    { "from": "decoder", "to": "viewer", "label": "解码结果", "variant": "emphasis", "fromSide": "bottom", "toSide": "top", "via": [[485, 190], [280, 190]], "labelAt": [330, 180] },
+    { "from": "viewer", "to": "player", "label": "播放控制", "variant": "emphasis", "route": "straight", "labelAt": [390, 264] },
+    { "from": "player", "to": "viewer", "label": "帧数据", "variant": "dashed", "route": "straight", "labelAt": [360, 324] },
+    { "from": "viewer", "to": "home", "label": "记录历史", "variant": "dashed", "route": "straight", "labelDx": 30 },
+    { "from": "convert", "to": "encoder", "label": "RGBA 帧流", "variant": "emphasis", "route": "straight", "labelAt": [352, 388] },
+    { "from": "encoder", "to": "convert", "label": "APNG 字节", "variant": "dashed", "route": "straight", "labelAt": [380, 476] }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "打开信号链", "items": ["原生多核解码优先（Android 线程池 / iOS ImageIO）", "帧文件缓存 size_mtime 命中 → 秒开", "Dart image 库 isolate 并行回退"] },
+    { "dot": "emerald", "title": "播放信号链", "items": ["ApngPlayer Ticker 驱动帧调度", "Image.memory 引擎解码，双端字节序安全", "进度条 / 倍速 / 逐帧精确控制"] },
+    { "dot": "rose", "title": "保存护栏", "items": ["取消保存弹窗 → 30s 超时兜底复位", "Dart 侧 try/finally 必复位", "导出路径全部安全复位"] }
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "APNG 阅览器 · 信号流",
+    "subtitle": "打开 / 播放 / 互转 / 保存 四条信号链（双端原生解码 + 磁盘帧缓存）",
+    "locale": "zh-CN",
+    "output": "docs/architecture.html",
+    "viewBox": [1120, 700],
+    "animation": "trace",
+    "visual_preset": "signal-flow",
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "open-flow", "label": "打开 APNG", "focus": ["user", "home", "native", "frames", "decoder", "viewer"], "note": "选文件 → 原生多核解码 → 帧文件缓存 → Dart 读回渲染。" },
+      { "id": "play-flow", "label": "逐帧播放", "focus": ["viewer", "player"], "note": "Ticker 驱动帧调度，Image.memory 引擎解码显示。" },
+      { "id": "convert-flow", "label": "图片互转", "focus": ["convert", "decoder", "encoder"], "note": "多图 RGBA → APNG 编码；APNG → 逐帧 PNG 导出。" },
+      { "id": "save-flow", "label": "保存导出", "focus": ["viewer", "save"], "note": "保存当前帧 / 原文件，系统对话框或自定义目录。" }
+    ],
+    "legend": {
+      "mode": "auto",
+      "entries": {
+        "emphasis": { "label": "主信号链" },
+        "security": { "label": "系统通道" },
+        "dashed": { "label": "缓存 / 回程" }
+      }
+    }
+  },
+  "stages": [
+    { "label": "用户" },
+    { "label": "Flutter 表现层" },
+    { "label": "Dart 逻辑层" },
+    { "label": "平台桥" },
+    { "label": "文件 / 系统" }
+  ],
+  "nodes": [
+    { "id": "user", "type": "external", "label": "用户", "sublabel": "触摸 / 手势", "stage": 0, "row": 1 },
+    { "id": "home", "type": "frontend", "label": "HomePage", "sublabel": "首页 / 历史", "stage": 1, "row": 0 },
+    { "id": "viewer", "type": "frontend", "label": "ViewerPage", "sublabel": "播放 / 保存 / FrameView", "stage": 1, "row": 1 },
+    { "id": "convert", "type": "frontend", "label": "ConvertPage", "sublabel": "图片 ↔ APNG", "stage": 1, "row": 2 },
+    { "id": "decoder", "type": "backend", "label": "ApngDecoder", "sublabel": "原生优先 · Dart 回退", "stage": 2, "row": 0 },
+    { "id": "player", "type": "backend", "label": "ApngPlayer", "sublabel": "Ticker 帧调度", "stage": 2, "row": 1 },
+    { "id": "encoder", "type": "backend", "label": "ApngEncoder", "sublabel": "多帧 → APNG", "stage": 2, "row": 2 },
+    { "id": "native", "type": "security", "label": "原生桥", "sublabel": "解码器 / 选择器 / 保存", "stage": 3, "row": 0 },
+    { "id": "save", "type": "security", "label": "系统保存", "sublabel": "文档对话框 / 文稿", "stage": 3, "row": 2 },
+    { "id": "frames", "type": "database", "label": "帧文件缓存", "sublabel": "native_frames", "stage": 4, "row": 1 }
+  ],
+  "flows": [
+    { "from": "user", "to": "home", "label": "选择文件", "variant": "emphasis", "route": "straight" },
+    { "from": "home", "to": "native", "label": "打开选择器", "variant": "security", "fromSide": "right", "toSide": "top", "via": [[440, 60], [745, 60]], "labelAt": [590, 60] },
+    { "from": "native", "to": "frames", "label": "并行解码写帧", "variant": "emphasis", "fromSide": "right", "toSide": "left", "via": [[940, 157], [940, 271]], "labelAt": [900, 214] },
+    { "from": "frames", "to": "decoder", "label": "帧路径", "variant": "dashed", "fromSide": "left", "toSide": "right", "via": [[745, 271], [745, 157]], "labelAt": [700, 214] },
+    { "from": "decoder", "to": "viewer", "label": "解码结果", "variant": "emphasis", "route": "straight" },
+    { "from": "viewer", "to": "player", "label": "播放控制", "variant": "emphasis", "route": "straight" },
+    { "from": "player", "to": "viewer", "label": "帧数据", "variant": "dashed", "route": "straight", "labelDy": 16 },
+    { "from": "viewer", "to": "save", "label": "saveFileDialog", "variant": "security", "fromSide": "right", "toSide": "bottom", "via": [[440, 470], [689, 470]], "labelAt": [560, 470] },
+    { "from": "convert", "to": "decoder", "label": "打开 APNG", "variant": "emphasis", "fromSide": "right", "toSide": "bottom", "via": [[440, 470], [530, 470]], "labelAt": [485, 470] },
+    { "from": "convert", "to": "encoder", "label": "RGBA 帧流", "variant": "emphasis", "route": "straight" },
+    { "from": "encoder", "to": "convert", "label": "APNG 字节", "variant": "dashed", "route": "straight", "labelDy": 16 }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "打开信号链", "items": ["原生多核解码优先（Android 线程池 / iOS ImageIO）", "帧文件缓存 size_mtime 命中 → 秒开", "Dart image 库 isolate 并行回退"] },
+    { "dot": "emerald", "title": "播放信号链", "items": ["ApngPlayer Ticker 驱动帧调度", "Image.memory 引擎解码，双端字节序安全", "进度条 / 倍速 / 逐帧精确控制"] },
+    { "dot": "rose", "title": "保存护栏", "items": ["取消保存弹窗 → 30s 超时兜底复位", "原生 didDismiss 观察者保证 result 必达", "导出路径全部 try/finally 复位"] }
+  ]
+}
