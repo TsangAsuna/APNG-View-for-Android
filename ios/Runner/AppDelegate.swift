@@ -60,34 +60,59 @@ import UniformTypeIdentifiers
         return
       }
       // 后台线程解码，避免阻塞 UI
-      DispatchQueue.global(qos: .userInitiated).async {
-        let tmpDir = FileManager.default.temporaryDirectory
-          .appendingPathComponent("native_frames", isDirectory: true)
-        try? FileManager.default.createDirectory(
-          at: tmpDir, withIntermediateDirectories: true)
-        guard let framePaths = ApngNativeDecoder.decode(path: path, tmpDir: tmpDir) else {
-          DispatchQueue.main.async { result(nil) }
-          return
-        }
-        var durations: [Int] = []
-        let meta = ApngNativeDecoder.peekMeta(path: path)
-        if let meta = meta {
-          for f in meta.frames {
-            var d = 0
-            if f.delayNum > 0 && f.delayDen > 0 {
-              d = Int(Double(f.delayNum) * 1000 / Double(f.delayDen))
+            DispatchQueue.global(qos: .userInitiated).async {
+              let fm = FileManager.default
+              // 持久缓存目录（Library/Caches，系统仅在空间不足时清理）
+              let baseDir = fm.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("native_frames", isDirectory: true)
+              // 缓存 key = 文件大小 + 最后修改时间（内容变则自动失效）
+              let size = (try? fm.attributesOfItem(atPath: path)[.size] as? Int) ?? 0
+              let mtime = (try? fm.attributesOfItem(atPath: path)[.modificationDate] as? Date)?
+                .timeIntervalSince1970 ?? 0
+              let cacheKey = "\(size)_\(Int(mtime))"
+              let tmpDir = baseDir.appendingPathComponent(cacheKey, isDirectory: true)
+              try? fm.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+
+              // 缓存命中（frame_0.png 存在且帧数对得上）→ 直接复用，零解码秒开
+              let frameCount = ApngNativeDecoder.peekMeta(path: path)?.frames.count ?? 0
+              let cached = (try? fm.contentsOfDirectory(atPath: tmpDir.path))?
+                .filter { $0.hasPrefix("frame_") && $0.hasSuffix(".png") }
+                .sorted() ?? []
+              let framePaths: [String]?
+              if cached.count == frameCount && frameCount > 0 {
+                framePaths = cached.map { tmpDir.appendingPathComponent($0).path }
+              } else {
+                // 无缓存或不全 → 清残帧后完整解码到缓存目录
+                if !cached.isEmpty {
+                  for f in cached {
+                    try? fm.removeItem(at: tmpDir.appendingPathComponent(f))
+                  }
+                }
+                framePaths = ApngNativeDecoder.decode(path: path, tmpDir: tmpDir)
+              }
+              guard let framePaths = framePaths else {
+                DispatchQueue.main.async { result(nil) }
+                return
+              }
+              var durations: [Int] = []
+              let meta = ApngNativeDecoder.peekMeta(path: path)
+              if let meta = meta {
+                for f in meta.frames {
+                  var d = 0
+                  if f.delayNum > 0 && f.delayDen > 0 {
+                    d = Int(Double(f.delayNum) * 1000 / Double(f.delayDen))
+                  }
+                  durations.append(d > 0 ? d : 100)
+                }
+              }
+              var map: [String: Any] = [:]
+              map["paths"] = framePaths
+              map["durations"] = durations
+              map["width"] = meta?.width ?? 0
+              map["height"] = meta?.height ?? 0
+              map["loopCount"] = meta?.loopCount ?? 0
+              DispatchQueue.main.async { result(map) }
             }
-            durations.append(d > 0 ? d : 100)
-          }
-        }
-        var map: [String: Any] = [:]
-        map["paths"] = framePaths
-        map["durations"] = durations
-        map["width"] = meta?.width ?? 0
-        map["height"] = meta?.height ?? 0
-        map["loopCount"] = meta?.loopCount ?? 0
-        DispatchQueue.main.async { result(map) }
-      }
     }
   }
 

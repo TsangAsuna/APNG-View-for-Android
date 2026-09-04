@@ -94,8 +94,22 @@ class MainActivity : FlutterActivity() {
         }
         Thread {
             try {
-                val tmpDir = File(cacheDir, "native_frames").apply { mkdirs() }
-                val framePaths = ApngNativeDecoder.decode(path, tmpDir)
+                val src = File(path)
+                // 缓存 key = 文件大小 + 最后修改时间（内容变则自动失效）
+                val cacheKey = "${src.length()}_${src.lastModified()}"
+                val tmpDir = File(cacheDir, "native_frames/$cacheKey").apply { mkdirs() }
+                // 检查缓存：已有 frame_0.png 且帧数对得上 → 直接复用（秒开）
+                val frameCount = ApngNativeDecoder.peekMeta(path)?.frames?.size ?: 0
+                val cached = tmpDir.listFiles()
+                    ?.filter { it.name.startsWith("frame_") && it.name.endsWith(".png") }
+                    ?.sortedBy { it.name }
+                val framePaths: List<String>? = if (cached != null && cached.size == frameCount && frameCount > 0) {
+                    cached.map { it.absolutePath }
+                } else {
+                    // 无缓存或不全 → 完整解码到缓存目录
+                    if (cached != null) cached.forEach { it.delete() }
+                    ApngNativeDecoder.decode(path, tmpDir)
+                }
                 if (framePaths == null) {
                     result.success(null)
                     return@Thread

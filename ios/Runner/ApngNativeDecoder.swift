@@ -57,7 +57,7 @@ enum ApngNativeDecoder {
         // 并行解码每一帧（M1/M2 等多核拉满，避免单核瓶颈）
         DispatchQueue.concurrentPerform(iterations: meta.frames.count) { i in
             if let png = decodeFrameToPng(bytes, meta, meta.frames[i]) {
-                let dest = tmpDir.appendingPathComponent("native_frame_\(i).png")
+                let dest = tmpDir.appendingPathComponent("frame_\(i).png")
                 do {
                     try png.write(to: dest)
                     lock.lock()

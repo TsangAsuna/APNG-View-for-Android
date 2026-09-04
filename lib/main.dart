@@ -328,6 +328,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   style: FilledButton.styleFrom(
                     backgroundColor: Colors.white,
                     foregroundColor: const Color(0xFF0288D1),
+                    elevation: 0,
+                    shadowColor: Colors.transparent,
+                    overlayColor: Colors.transparent,
                     padding: const EdgeInsets.symmetric(
                         horizontal: 12, vertical: 14),
                     shape: RoundedRectangleBorder(
@@ -348,6 +351,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   style: FilledButton.styleFrom(
                     backgroundColor: Colors.white,
                     foregroundColor: const Color(0xFF0288D1),
+                    elevation: 0,
+                    shadowColor: Colors.transparent,
+                    overlayColor: Colors.transparent,
                     padding: const EdgeInsets.symmetric(
                         horizontal: 12, vertical: 14),
                     shape: RoundedRectangleBorder(
@@ -373,6 +379,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   style: FilledButton.styleFrom(
                     backgroundColor: Colors.white,
                     foregroundColor: const Color(0xFF0288D1),
+                    elevation: 0,
+                    shadowColor: Colors.transparent,
+                    overlayColor: Colors.transparent,
                     padding: const EdgeInsets.symmetric(
                         horizontal: 12, vertical: 14),
                     shape: RoundedRectangleBorder(

@@ -73,7 +73,7 @@ object ApngNativeDecoder {
             val outPaths = ArrayList<String>(meta.frames.size)
             for ((i, future) in futures.withIndex()) {
                 val png = future.get() ?: return null
-                val dest = File(tmpDir, "native_frame_${i}_${System.nanoTime()}.png")
+                val dest = File(tmpDir, "frame_${i}.png")
                 FileOutputStream(dest).use { it.write(png) }
                 outPaths.add(dest.absolutePath)
             }
