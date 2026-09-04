@@ -46,6 +46,64 @@ class _ApngViewerAppState extends State<ApngViewerApp> {
     } catch (_) {}
   }
 
+  Future<void> _setThemeMode(ThemeMode mode) async {
+    setState(() => _themeMode = mode);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_themeKey, mode.name);
+    } catch (_) {}
+  }
+
+  ThemeData _buildTheme(Brightness brightness) {
+    return ThemeData(
+      useMaterial3: true,
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: const Color(0xFF4FC3F7),
+        brightness: brightness,
+      ),
+      scaffoldBackgroundColor: brightness == Brightness.light
+          ? const Color(0xFFF5F7FA)
+          : const Color(0xFF121212),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'APNG 阅览器',
+      debugShowCheckedModeBanner: false,
+      theme: _buildTheme(Brightness.light),
+      darkTheme: _buildTheme(Brightness.dark),
+      themeMode: _themeMode,
+      home: HomePage(
+        themeMode: _themeMode,
+        onThemeModeChanged: _setThemeMode,
+      ),
+    );
+  }
+}
+
+class HomePage extends StatefulWidget {
+  final ThemeMode themeMode;
+  final ValueChanged<ThemeMode> onThemeModeChanged;
+
+  const HomePage({
+    super.key,
+    required this.themeMode,
+    required this.onThemeModeChanged,
+  });
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
+  final List<Map<String, String>> _recentFiles = [];
+  final bool _loading = false;
+  MethodChannel? _intentChannel;
+
+  static const _prefsKey = 'recent_apng_files';
+
   Future<void> _showSaveModeSheet(BuildContext context) async {
     final current = await FileGateway.loadSaveMode();
     if (!mounted) return;
@@ -105,64 +163,6 @@ class _ApngViewerAppState extends State<ApngViewerApp> {
       SnackBar(content: Text('保存方式已设为: ' + label)),
     );
   }
-
-  Future<void> _setThemeMode(ThemeMode mode) async {
-    setState(() => _themeMode = mode);
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_themeKey, mode.name);
-    } catch (_) {}
-  }
-
-  ThemeData _buildTheme(Brightness brightness) {
-    return ThemeData(
-      useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFF4FC3F7),
-        brightness: brightness,
-      ),
-      scaffoldBackgroundColor: brightness == Brightness.light
-          ? const Color(0xFFF5F7FA)
-          : const Color(0xFF121212),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'APNG 阅览器',
-      debugShowCheckedModeBanner: false,
-      theme: _buildTheme(Brightness.light),
-      darkTheme: _buildTheme(Brightness.dark),
-      themeMode: _themeMode,
-      home: HomePage(
-        themeMode: _themeMode,
-        onThemeModeChanged: _setThemeMode,
-      ),
-    );
-  }
-}
-
-class HomePage extends StatefulWidget {
-  final ThemeMode themeMode;
-  final ValueChanged<ThemeMode> onThemeModeChanged;
-
-  const HomePage({
-    super.key,
-    required this.themeMode,
-    required this.onThemeModeChanged,
-  });
-
-  @override
-  State<HomePage> createState() => _HomePageState();
-}
-
-class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
-  final List<Map<String, String>> _recentFiles = [];
-  final bool _loading = false;
-  MethodChannel? _intentChannel;
-
-  static const _prefsKey = 'recent_apng_files';
 
   @override
   void initState() {
