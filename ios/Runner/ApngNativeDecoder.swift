@@ -1,0 +1,340 @@
+import Foundation
+import UIKit
+import Compression
+
+/// 轻量原生 APNG 解码器（自研，不依赖 ImageIO）。
+///
+/// iOS 15 的 ImageIO 对 APNG 只返回 count=1（当静态图处理），无法逐帧取图。
+/// 因此与 Android 端一致，自研解析：系统 Compression/zlib 解压 + 行滤波还原，
+/// 每帧输出 PNG 字节。速度远快于纯 Dart（ImageToolbox 同思路）。
+///
+/// 支持：8-bit 灰度/RGB/RGBA/索引色，非隔行；帧为全尺寸 source-blend。
+/// 复杂帧（偏移/叠加/隔行/16bit）返回 nil → Dart 回退。
+enum ApngNativeDecoder {
+
+    struct FrameInfo {
+        var width: Int
+        var height: Int
+        var xOffset: Int
+        var yOffset: Int
+        var delayNum: Int
+        var delayDen: Int
+        var disposeOp: Int
+        var blendOp: Int
+        var dataOffset: Int
+        var dataLen: Int
+    }
+
+    struct ApngMeta {
+        var width: Int
+        var height: Int
+        var bitDepth: Int
+        var colorType: Int
+        var interlace: Int
+        var frames: [FrameInfo]
+        var plte: Data?
+        var trns: Data?
+        var loopCount: Int
+    }
+
+    /// 解码 APNG 文件，每帧输出 PNG 到 tmp，返回路径列表；不支持返回 nil
+    static func decode(path: String, tmpDir: URL) -> [String]? {
+        guard let bytes = try? Data(contentsOf: URL(fileURLWithPath: path)) else { return nil }
+        guard let meta = parseChunks(bytes) else { return nil }
+        // 仅支持非隔行、8-bit、多帧
+        guard meta.interlace == 0, meta.bitDepth == 8, meta.frames.count >= 2 else { return nil }
+        // 仅支持全尺寸 source-blend 帧（最常见）；否则回退 Dart 完整合成
+        for f in meta.frames {
+            if f.xOffset != 0 || f.yOffset != 0 ||
+                f.width != meta.width || f.height != meta.height ||
+                f.blendOp != 0 {
+                return nil
+            }
+        }
+
+        var outPaths: [String] = []
+        for (i, f) in meta.frames.enumerated() {
+            guard let png = decodeFrameToPng(bytes, meta, f) else { return nil }
+            let dest = tmpDir.appendingPathComponent("native_frame_\(i)_\(Int(Date().timeIntervalSince1970 * 1000)).png")
+            do {
+                try png.write(to: dest)
+                outPaths.append(dest.path)
+            } catch {
+                return nil
+            }
+        }
+        return outPaths
+    }
+
+    /// 只解析元数据（宽高/帧数/时长/loop）
+    static func peekMeta(path: String) -> ApngMeta? {
+        guard let bytes = try? Data(contentsOf: URL(fileURLWithPath: path)) else { return nil }
+        return parseChunks(bytes)
+    }
+
+    // MARK: - Chunk 解析
+
+    private static func parseChunks(_ bytes: Data) -> ApngMeta? {
+        guard bytes.count >= 8 else { return nil }
+        let sig: [UInt8] = [137, 80, 78, 71, 13, 10, 26, 10]
+        if Array(bytes.prefix(8)) != sig { return nil }
+
+        var off = 8
+        var width = 0, height = 0, bitDepth = 8, colorType = 0, interlace = 0
+        var plte: Data?, trns: Data?
+        var numFrames = 0, loopCount = 0
+        var frames: [FrameInfo] = []
+
+        var curW = 0, curH = 0, curX = 0, curY = 0
+        var curDelayNum = 0, curDelayDen = 0, curDispose = 0, curBlend = 0
+        var frameDataOff = -1, frameDataLen = 0
+
+        func flushFrame() {
+            if frameDataOff >= 0 && frameDataLen > 0 {
+                frames.append(FrameInfo(
+                    width: curW, height: curH, xOffset: curX, yOffset: curY,
+                    delayNum: curDelayNum, delayDen: curDelayDen,
+                    disposeOp: curDispose, blendOp: curBlend,
+                    dataOffset: frameDataOff, dataLen: frameDataLen))
+            }
+        }
+
+        while off + 8 <= bytes.count {
+            let len = readInt(bytes, off)
+            guard let type = String(data: bytes.subdata(in: (off + 4)..<(off + 8)), encoding: .ascii) else { return nil }
+            let dataOff = off + 8
+            let dataEnd = dataOff + len
+            guard dataEnd + 4 <= bytes.count else { return nil }
+
+            switch type {
+            case "IHDR":
+                guard len >= 13 else { return nil }
+                width = readInt(bytes, dataOff)
+                height = readInt(bytes, dataOff + 4)
+                bitDepth = Int(bytes[dataOff + 8])
+                colorType = Int(bytes[dataOff + 9])
+                interlace = Int(bytes[dataOff + 12])
+            case "acTL":
+                if len >= 8 {
+                    numFrames = readInt(bytes, dataOff)
+                    loopCount = readInt(bytes, dataOff + 4)
+                }
+            case "fcTL":
+                if len >= 26 {
+                    flushFrame()
+                    curW = readInt(bytes, dataOff + 4)
+                    curH = readInt(bytes, dataOff + 8)
+                    curX = readInt(bytes, dataOff + 12)
+                    curY = readInt(bytes, dataOff + 16)
+                    curDelayNum = readShort(bytes, dataOff + 20)
+                    curDelayDen = readShort(bytes, dataOff + 22)
+                    curDispose = Int(bytes[dataOff + 24])
+                    curBlend = Int(bytes[dataOff + 25])
+                    frameDataOff = -1; frameDataLen = 0
+                }
+            case "IDAT":
+                if frameDataOff < 0 { frameDataOff = dataOff }
+                frameDataLen += len
+            case "fdAT":
+                if frameDataOff < 0 { frameDataOff = dataOff + 4 }
+                frameDataLen += (len - 4)
+            case "PLTE":
+                plte = bytes.subdata(in: dataOff..<dataEnd)
+            case "tRNS":
+                trns = bytes.subdata(in: dataOff..<dataEnd)
+            case "IEND":
+                flushFrame()
+                return ApngMeta(width: width, height: height, bitDepth: bitDepth,
+                                colorType: colorType, interlace: interlace,
+                                frames: frames, plte: plte, trns: trns,
+                                loopCount: loopCount)
+            default:
+                break
+            }
+            off = dataEnd + 4
+        }
+        return nil
+    }
+
+    // MARK: - 帧解码
+
+    private static func decodeFrameToPng(_ bytes: Data, _ meta: ApngMeta, _ frame: FrameInfo) -> Data? {
+        let w = frame.width, h = frame.height
+        let channels: Int
+        switch meta.colorType {
+        case 0: channels = 1 // grayscale
+        case 2: channels = 3 // rgb
+        case 3: channels = 1 // indexed
+        case 4: channels = 2 // gray+alpha
+        case 6: channels = 4 // rgba
+        default: return nil
+        }
+        let rowBytes = w * channels
+
+        // zlib 解压（系统 Compression 框架）
+        let compressed = bytes.subdata(in: frame.dataOffset..<(frame.dataOffset + frame.dataLen))
+        guard let raw = inflate(compressed) else { return nil }
+        guard raw.count >= h * (rowBytes + 1) else { return nil }
+
+        // 行滤波还原
+        var pixels = [UInt8](repeating: 0, count: w * h * 4)
+        var src = 0
+        var prevRow = [UInt8](repeating: 0, count: rowBytes)
+        var rawArr = [UInt8](raw)
+
+        for y in 0..<h {
+            guard src < rawArr.count else { return nil }
+            let filter = Int(rawArr[src]); src += 1
+            guard src + rowBytes <= rawArr.count else { return nil }
+            var row = Array(rawArr[src..<(src + rowBytes)]); src += rowBytes
+            unfilter(filter, &row, prevRow, channels)
+            fillPixels(meta, row, &pixels, y, w)
+            prevRow = row
+        }
+
+        // 编码 PNG（用 UIImage 系统编码器，保持与原实现一致的高质量输出）
+        guard let image = bitmapFrom(pixels, w, h), let png = image.pngData() else { return nil }
+        return png
+    }
+
+    private static func fillPixels(_ meta: ApngMeta, _ row: [UInt8], _ pixels: inout [UInt8], _ y: Int, _ w: Int) {
+        var px = y * w * 4
+        switch meta.colorType {
+        case 6: // rgba
+            for x in 0..<w {
+                pixels[px] = row[x * 4]
+                pixels[px + 1] = row[x * 4 + 1]
+                pixels[px + 2] = row[x * 4 + 2]
+                pixels[px + 3] = row[x * 4 + 3]
+                px += 4
+            }
+        case 2: // rgb
+            for x in 0..<w {
+                pixels[px] = row[x * 3]
+                pixels[px + 1] = row[x * 3 + 1]
+                pixels[px + 2] = row[x * 3 + 2]
+                pixels[px + 3] = 255
+                px += 4
+            }
+        case 0: // grayscale
+            for x in 0..<w {
+                pixels[px] = row[x]
+                pixels[px + 1] = row[x]
+                pixels[px + 2] = row[x]
+                pixels[px + 3] = 255
+                px += 4
+            }
+        case 4: // gray+alpha
+            for x in 0..<w {
+                pixels[px] = row[x * 2]
+                pixels[px + 1] = row[x * 2]
+                pixels[px + 2] = row[x * 2]
+                pixels[px + 3] = row[x * 2 + 1]
+                px += 4
+            }
+        case 3: // indexed
+            guard let plte = meta.plte else { return }
+            let trns = meta.trns
+            for x in 0..<w {
+                let idx = Int(row[x])
+                let pi = idx * 3
+                guard pi + 2 < plte.count else { return }
+                pixels[px] = plte[plte.startIndex + pi]
+                pixels[px + 1] = plte[plte.startIndex + pi + 1]
+                pixels[px + 2] = plte[plte.startIndex + pi + 2]
+                pixels[px + 3] = (trns != nil && idx < trns!.count) ? trns![trns!.startIndex + idx] : 255
+                px += 4
+            }
+        default:
+            break
+        }
+    }
+
+    /// PNG 行滤波还原
+    private static func unfilter(_ filter: Int, _ row: inout [UInt8], _ prev: [UInt8], _ bpp: Int) {
+        let n = row.count
+        switch filter {
+        case 0: break // None
+        case 1: // Sub
+            for x in bpp..<n {
+                row[x] = UInt8((Int(row[x]) + Int(row[x - bpp])) & 0xFF)
+            }
+        case 2: // Up
+            for x in 0..<n {
+                row[x] = UInt8((Int(row[x]) + Int(prev[x])) & 0xFF)
+            }
+        case 3: // Average
+            for x in 0..<n {
+                let a = x >= bpp ? Int(row[x - bpp]) : 0
+                let b = Int(prev[x])
+                row[x] = UInt8((Int(row[x]) + ((a + b) >> 1)) & 0xFF)
+            }
+        case 4: // Paeth
+            for x in 0..<n {
+                let a = x >= bpp ? Int(row[x - bpp]) : 0
+                let b = Int(prev[x])
+                let c = x >= bpp ? Int(prev[x - bpp]) : 0
+                let p = a + b - c
+                let pa = abs(p - a), pb = abs(p - b), pc = abs(p - c)
+                let pred: Int
+                if pa <= pb && pa <= pc { pred = a }
+                else if pb <= pc { pred = b }
+                else { pred = c }
+                row[x] = UInt8((Int(row[x]) + pred) & 0xFF)
+            }
+        default: break
+        }
+    }
+
+    // MARK: - 工具
+
+    private static func bitmapFrom(_ pixels: [UInt8], _ w: Int, _ h: Int) -> UIImage? {
+        // RGBA 字节序 → CGImage
+        let bitsPerComponent = 8
+        let bitsPerPixel = 32
+        let bytesPerRow = w * 4
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
+        var data = pixels
+        guard let provider = CGDataProvider(data: Data(data) as CFData) else { return nil }
+        guard let cgImage = CGImage(
+            width: w, height: h, bitsPerComponent: bitsPerComponent,
+            bitsPerPixel: bitsPerPixel, bytesPerRow: bytesPerRow,
+            space: colorSpace, bitmapInfo: bitmapInfo,
+            provider: provider, decode: nil, shouldInterpolate: false,
+            intent: .defaultIntent) else { return nil }
+        return UIImage(cgImage: cgImage)
+    }
+
+    /// 系统 Compression zlib 解压
+    private static func inflate(_ data: Data) -> Data? {
+        guard !data.isEmpty else { return nil }
+        var result = Data()
+        // 预估输出：zlib 解压最大约 100x 输入，设 256MB 上限
+        let capacity = max(data.count * 8, 1 << 20)
+        var output = [UInt8](repeating: 0, count: min(capacity, 256 << 20))
+        let written = output.withUnsafeMutableBytes { dst in
+            data.withUnsafeBytes { src in
+                compression_decode_buffer(
+                    dst.bindMemory(to: UInt8.self).baseAddress!,
+                    output.count,
+                    src.bindMemory(to: UInt8.self).baseAddress!,
+                    data.count,
+                    nil,
+                    COMPRESSION_ZLIB)
+            }
+        }
+        if written > 0 {
+            result.append(contentsOf: output[0..<written])
+        }
+        return result.isEmpty ? nil : result
+    }
+
+    private static func readInt(_ b: Data, _ off: Int) -> Int {
+        Int(b[off]) << 24 | Int(b[off + 1]) << 16 | Int(b[off + 2]) << 8 | Int(b[off + 3])
+    }
+
+    private static func readShort(_ b: Data, _ off: Int) -> Int {
+        Int(b[off]) << 8 | Int(b[off + 1])
+    }
+}

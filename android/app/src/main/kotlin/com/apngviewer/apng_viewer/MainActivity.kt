@@ -14,6 +14,7 @@ import java.io.FileOutputStream
 
 class MainActivity : FlutterActivity() {
     private val channelName = "com.apngviewer.apng_viewer/file"
+    private val nativeDecodeChannel = "com.apngviewer.apng_viewer/native_decode"
     private val pickSingleCode = 1001
     private val pickMultiCode = 1002
     private val pickTreeCode = 1003
@@ -75,6 +76,52 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+        // 原生 APNG 解码通道（独立通道，Dart 端 decodeAsync 优先调用）
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, nativeDecodeChannel)
+            .setMethodCallHandler { call, result ->
+                if (call.method == "decodeApng") {
+                    handleNativeDecode(call, result)
+                } else {
+                    result.notImplemented()
+                }
+            }
+    }
+
+    private fun handleNativeDecode(call: MethodCall, result: MethodChannel.Result) {
+        val path = call.argument<String>("path") ?: run {
+            result.success(null); return
+        }
+        Thread {
+            try {
+                val tmpDir = File(cacheDir, "native_frames").apply { mkdirs() }
+                val framePaths = ApngNativeDecoder.decode(path, tmpDir)
+                if (framePaths == null) {
+                    result.success(null)
+                    return@Thread
+                }
+                // 解析元数据（时长）
+                val durations = ArrayList<Int>()
+                val meta = ApngNativeDecoder.peekMeta(path)
+                if (meta != null) {
+                    for (f in meta.frames) {
+                        var d = 0
+                        if (f.delayNum > 0 && f.delayDen > 0) {
+                            d = (f.delayNum * 1000 / f.delayDen).toInt()
+                        }
+                        durations.add(if (d > 0) d else 100)
+                    }
+                }
+                val resultMap = HashMap<String, Any>()
+                resultMap["paths"] = framePaths
+                resultMap["durations"] = durations
+                resultMap["width"] = meta?.width ?: 0
+                resultMap["height"] = meta?.height ?: 0
+                resultMap["loopCount"] = meta?.loopCount ?: 0
+                result.success(resultMap)
+            } catch (e: Exception) {
+                result.success(null)
+            }
+        }.start()
     }
 
     private fun openFilePicker(single: Boolean) {

@@ -37,6 +37,58 @@ import UniformTypeIdentifiers
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
     registerImagePickerChannel(engineBridge.pluginRegistry)
     registerIntentChannel(engineBridge.pluginRegistry)
+    registerNativeDecodeChannel(engineBridge.pluginRegistry)
+  }
+
+  /// 注册原生 APNG 解码通道（Dart decodeAsync 优先调用，秒开大图）
+  private func registerNativeDecodeChannel(_ registry: FlutterPluginRegistry) {
+    guard let registrar = registry.registrar(forPlugin: "ApngNativeDecoder") else {
+      return
+    }
+    let channel = FlutterMethodChannel(
+      name: "com.apngviewer.apng_viewer/native_decode",
+      binaryMessenger: registrar.messenger()
+    )
+    channel.setMethodCallHandler { call, result in
+      guard call.method == "decodeApng" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      let args = call.arguments as? [String: Any] ?? [:]
+      guard let path = args["path"] as? String, !path.isEmpty else {
+        result(nil)
+        return
+      }
+      // 后台线程解码，避免阻塞 UI
+      DispatchQueue.global(qos: .userInitiated).async {
+        let tmpDir = FileManager.default.temporaryDirectory
+          .appendingPathComponent("native_frames", isDirectory: true)
+        try? FileManager.default.createDirectory(
+          at: tmpDir, withIntermediateDirectories: true)
+        guard let framePaths = ApngNativeDecoder.decode(path: path, tmpDir: tmpDir) else {
+          DispatchQueue.main.async { result(nil) }
+          return
+        }
+        var durations: [Int] = []
+        let meta = ApngNativeDecoder.peekMeta(path: path)
+        if let meta = meta {
+          for f in meta.frames {
+            var d = 0
+            if f.delayNum > 0 && f.delayDen > 0 {
+              d = Int(Double(f.delayNum) * 1000 / Double(f.delayDen))
+            }
+            durations.append(d > 0 ? d : 100)
+          }
+        }
+        var map: [String: Any] = [:]
+        map["paths"] = framePaths
+        map["durations"] = durations
+        map["width"] = meta?.width ?? 0
+        map["height"] = meta?.height ?? 0
+        map["loopCount"] = meta?.loopCount ?? 0
+        DispatchQueue.main.async { result(map) }
+      }
+    }
   }
 
   /// 注册 intent 通道：Dart 主动拉取外部打开的文件（Filza "Open in"）

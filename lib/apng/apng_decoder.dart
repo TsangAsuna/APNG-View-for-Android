@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:isolate';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
 /// APNG 文件信息
 class ApngInfo {
@@ -98,7 +100,63 @@ class ApngDecoder {
 
   /// 并行解码（viewer 大图入口）。
   /// [onProgress] 收到 (已处理帧数, 总帧数) 进度回调。
+  ///
+  /// 优先走原生解码通道（Android ImageDecoder 自研解析 / iOS ImageIO）：
+  /// 系统 C/C++ 解码比纯 Dart 快 10-30 倍（ImageToolbox 同思路）。
+  /// 原生不可用/失败时回退纯 Dart 并行解码，保证任何 APNG 都能显示。
   static Future<ApngDecodeResult?> decodeAsync(
+    Uint8List bytes, {
+    String filePath = '',
+    void Function(int done, int total)? onProgress,
+  }) async {
+    // 原生解码优先（仅在有真实文件路径时尝试）
+    if (filePath.isNotEmpty) {
+      try {
+        final native = await _nativeDecodeApng(filePath);
+        if (native != null) {
+          onProgress?.call(native.frames.length, native.frames.length);
+          return native;
+        }
+      } catch (_) {
+        // 原生不可用，走纯 Dart
+      }
+    }
+    return _decodeAsyncDart(bytes, filePath: filePath, onProgress: onProgress);
+  }
+
+  /// 调用平台原生 APNG 解码器（Android/iOS）。
+  /// 返回 Map: {paths: [帧PNG文件路径], durations: [ms], width, height, loopCount}
+  /// 原生不支持（复杂帧/格式）时返回 null → 回退纯 Dart。
+  static Future<ApngDecodeResult?> _nativeDecodeApng(String path) async {
+    final channel = MethodChannel('com.apngviewer.apng_viewer/native_decode');
+    final result = await channel.invokeMapMethod<String, dynamic>(
+        'decodeApng', {'path': path});
+    if (result == null) return null;
+    final paths = (result['paths'] as List).cast<String>();
+    final durations = (result['durations'] as List).cast<int>();
+    if (paths.isEmpty) return null;
+
+    final frames = <ApngFrame>[];
+    for (var i = 0; i < paths.length; i++) {
+      final fbytes = await File(paths[i]).readAsBytes();
+      frames.add(ApngFrame(
+        pngBytes: fbytes,
+        width: (result['width'] as num?)?.toInt() ?? 0,
+        height: (result['height'] as num?)?.toInt() ?? 0,
+        durationMs: i < durations.length ? durations[i] : 100,
+      ));
+    }
+    return ApngDecodeResult(
+      frames: frames,
+      width: (result['width'] as num?)?.toInt() ?? frames.first.width,
+      height: (result['height'] as num?)?.toInt() ?? frames.first.height,
+      loopCount: (result['loopCount'] as num?)?.toInt() ?? 0,
+      durations: durations,
+    );
+  }
+
+  /// 纯 Dart 并行解码（原生不可用时的回退路径）
+  static Future<ApngDecodeResult?> _decodeAsyncDart(
     Uint8List bytes, {
     String filePath = '',
     void Function(int done, int total)? onProgress,
