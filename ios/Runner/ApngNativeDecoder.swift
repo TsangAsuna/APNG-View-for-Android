@@ -21,8 +21,8 @@ enum ApngNativeDecoder {
         var delayDen: Int
         var disposeOp: Int
         var blendOp: Int
-        var dataOffset: Int
-        var dataLen: Int
+        // 压缩数据段列表（IDAT/fdAT 可能分多段）
+        var segments: [(offset: Int, len: Int)]
     }
 
     struct ApngMeta {
@@ -87,15 +87,16 @@ enum ApngNativeDecoder {
 
         var curW = 0, curH = 0, curX = 0, curY = 0
         var curDelayNum = 0, curDelayDen = 0, curDispose = 0, curBlend = 0
-        var frameDataOff = -1, frameDataLen = 0
+        // 当前帧的压缩数据段（IDAT/fdAT 分多段）
+        var curSegments: [(offset: Int, len: Int)] = []
 
         func flushFrame() {
-            if frameDataOff >= 0 && frameDataLen > 0 {
+            if !curSegments.isEmpty {
                 frames.append(FrameInfo(
                     width: curW, height: curH, xOffset: curX, yOffset: curY,
                     delayNum: curDelayNum, delayDen: curDelayDen,
                     disposeOp: curDispose, blendOp: curBlend,
-                    dataOffset: frameDataOff, dataLen: frameDataLen))
+                    segments: curSegments))
             }
         }
 
@@ -130,14 +131,13 @@ enum ApngNativeDecoder {
                     curDelayDen = readShort(bytes, dataOff + 22)
                     curDispose = Int(bytes[dataOff + 24])
                     curBlend = Int(bytes[dataOff + 25])
-                    frameDataOff = -1; frameDataLen = 0
+                    curSegments = []
                 }
             case "IDAT":
-                if frameDataOff < 0 { frameDataOff = dataOff }
-                frameDataLen += len
+                curSegments.append((offset: dataOff, len: len))
             case "fdAT":
-                if frameDataOff < 0 { frameDataOff = dataOff + 4 }
-                frameDataLen += (len - 4)
+                // 跳过 4 字节 sequence number
+                curSegments.append((offset: dataOff + 4, len: len - 4))
             case "PLTE":
                 plte = bytes.subdata(in: dataOff..<dataEnd)
             case "tRNS":
@@ -171,8 +171,11 @@ enum ApngNativeDecoder {
         }
         let rowBytes = w * channels
 
-        // zlib 解压（系统 Compression 框架）
-        let compressed = bytes.subdata(in: frame.dataOffset..<(frame.dataOffset + frame.dataLen))
+        // zlib 解压（系统 Compression 框架）：拼接各 IDAT/fdAT 数据段
+        var compressed = Data()
+        for seg in frame.segments {
+            compressed.append(bytes.subdata(in: seg.offset..<(seg.offset + seg.len)))
+        }
         guard let raw = inflate(compressed) else { return nil }
         guard raw.count >= h * (rowBytes + 1) else { return nil }
 

@@ -27,7 +27,8 @@ object ApngNativeDecoder {
         val xOffset: Int, val yOffset: Int,
         val delayNum: Int, val delayDen: Int,
         val disposeOp: Int, val blendOp: Int,
-        val dataOffset: Long, val dataLen: Int,
+        // 压缩数据段列表（每段 [offset, len]）——IDAT/fdAT 可能分多段
+        val segments: List<LongArray>,
     )
 
     data class ApngMeta(
@@ -100,16 +101,17 @@ object ApngNativeDecoder {
         var curX = 0; var curY = 0
         var curDelayNum = 0; var curDelayDen = 0
         var curDispose = 0; var curBlend = 0
-        var frameDataOff = -1L; var frameDataLen = 0
+        // 当前帧的压缩数据段（IDAT/fdAT 可能分多段，每段 [offset, len]）
+        val curSegments = ArrayList<LongArray>()
 
         fun flushFrame() {
-            if (frameDataOff >= 0 && frameDataLen > 0) {
+            if (curSegments.isNotEmpty()) {
                 frames.add(FrameInfo(
                     width = curWidth, height = curHeight,
                     xOffset = curX, yOffset = curY,
                     delayNum = curDelayNum, delayDen = curDelayDen,
                     disposeOp = curDispose, blendOp = curBlend,
-                    dataOffset = frameDataOff, dataLen = frameDataLen))
+                    segments = ArrayList(curSegments)))
             }
         }
 
@@ -147,18 +149,16 @@ object ApngNativeDecoder {
                         curDelayDen = readShort(bytes, dataOff + 22)
                         curDispose = bytes[dataOff + 24].toInt() and 0xFF
                         curBlend = bytes[dataOff + 25].toInt() and 0xFF
-                        frameDataOff = -1; frameDataLen = 0
+                        curSegments.clear()
                     }
                 }
                 "IDAT" -> {
-                    // 属于当前帧（第一帧）
-                    if (frameDataOff < 0) frameDataOff = dataOff.toLong()
-                    frameDataLen += len
+                    // 属于当前帧（第一帧）；多段累加
+                    curSegments.add(longArrayOf(dataOff.toLong(), len.toLong()))
                 }
                 "fdAT" -> {
                     // 跳过 4 字节 sequence number
-                    if (frameDataOff < 0) frameDataOff = (dataOff + 4).toLong()
-                    frameDataLen += (len - 4)
+                    curSegments.add(longArrayOf((dataOff + 4).toLong(), (len - 4).toLong()))
                 }
                 "PLTE" -> plte = bytes.copyOfRange(dataOff, dataEnd)
                 "tRNS" -> trns = bytes.copyOfRange(dataOff, dataEnd)
@@ -171,12 +171,10 @@ object ApngNativeDecoder {
         }
 
         if (width <= 0 || height <= 0) return null
-        if (frames.isEmpty() && numFrames <= 1) {
+        if (frames.isEmpty() && numFrames <= 1 && curSegments.isNotEmpty()) {
             // 静态 PNG：单帧（IDAT 数据）也记录，便于统一处理
-            if (frameDataOff >= 0) {
-                frames.add(FrameInfo(width, height, 0, 0, 0, 0, 0, 0,
-                    frameDataOff, frameDataLen))
-            }
+            frames.add(FrameInfo(width, height, 0, 0, 0, 0, 0, 0,
+                ArrayList(curSegments)))
         }
         return ApngMeta(width, height, bitDepth, colorType, interlace,
             frames, plte, trns, loopCount)
@@ -198,9 +196,15 @@ object ApngNativeDecoder {
         val bpp = channels // 8-bit
         val rowBytes = w * channels
 
-        // zlib 解压
-        val compressed = ByteArray(frame.dataLen)
-        System.arraycopy(bytes, frame.dataOffset.toInt(), compressed, 0, frame.dataLen)
+        // zlib 解压：把各 IDAT/fdAT 数据段拼成完整压缩流
+        var total = 0
+        for (seg in frame.segments) total += seg[1].toInt()
+        val compressed = ByteArray(total)
+        var cp = 0
+        for (seg in frame.segments) {
+            System.arraycopy(bytes, seg[0].toInt(), compressed, cp, seg[1].toInt())
+            cp += seg[1].toInt()
+        }
         val inflater = Inflater()
         inflater.setInput(compressed)
         val raw = ByteArray(rowBytes * h + h) // 每行 1 字节 filter

@@ -335,6 +335,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   ),
                   icon: const Icon(Icons.folder_open, size: 24),
                   label: const Text('阅览图片',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style:
                           TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
                 ),
@@ -352,7 +354,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         borderRadius: BorderRadius.circular(14)),
                   ),
                   icon: const Icon(Icons.folder_special, size: 24),
-                  label: const Text('从文件打开',
+                  label: const Text('文件打开',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style:
                           TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
                 ),
@@ -376,6 +380,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   ),
                   icon: const Icon(Icons.swap_horiz, size: 24),
                   label: const Text('图片互转',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style:
                           TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
                 ),
