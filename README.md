@@ -28,7 +28,6 @@
 
 [![APNG 阅览器信号流架构](docs/architecture.png)](docs/architecture.html?theme=light#view=reset)
 
-> 点击上图打开**可交互信号流架构图**：鼠标悬停/点击组件可聚焦高亮，支持缩放、搜索、明暗主题切换与路线追踪。
 
 ### 四条信号链
 
