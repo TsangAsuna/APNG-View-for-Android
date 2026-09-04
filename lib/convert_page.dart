@@ -40,10 +40,17 @@ Uint8List? _encodeApngWorker(List<Object> args) {
     final height = args[2] as int;
     final delay = args[3] as int;
     final loop = args[4] as int;
+    // args[5]/args[6]: 每帧实际宽高（尺寸不一也能编码，不会失败）
+    final frameWidths = (args.length > 5 ? args[5] as List : const <int>[])
+        .cast<int>();
+    final frameHeights = (args.length > 6 ? args[6] as List : const <int>[])
+        .cast<int>();
     return ApngEncoder.encode(
       frames: frames,
       width: width,
       height: height,
+      frameWidths: frameWidths,
+      frameHeights: frameHeights,
       frameDurationsMs: List.filled(frames.length, delay),
       loopCount: loop,
     );
@@ -186,6 +193,8 @@ class _ConvertPageState extends State<ConvertPage>
       _srcImages.first.height,
       _frameDelay,
       _loopCount,
+      _srcImages.map((e) => e.width).toList(),
+      _srcImages.map((e) => e.height).toList(),
     ]);
     if (!mounted) return;
     setState(() {
