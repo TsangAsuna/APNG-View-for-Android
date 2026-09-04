@@ -1,5 +1,6 @@
 import Flutter
 import UIKit
+import Photos
 import UniformTypeIdentifiers
 
 @main
@@ -216,6 +217,19 @@ import UniformTypeIdentifiers
           return
         }
         result(self.writeToDocumentsDir(fileName: name, data: bytes))
+      case "saveToAlbum":
+        // 保存到相册（PhotoKit）
+        let args = call.arguments as? [String: Any] ?? [:]
+        let data = (args["data"] as? FlutterStandardTypedData)?.data
+        guard let bytes = data else {
+          result(false)
+          return
+        }
+        PHPhotoLibrary.shared().performChanges({
+          PHAssetChangeRequest.creationRequestForAsset(from: UIImage(data: bytes)!)
+        }) { ok, _ in
+          DispatchQueue.main.async { result(ok) }
+        }
       case "clearPendingCache":
         // 清除图片选择/文件打开复制到 tmp 的缓存（picker_/shared_ 前缀），
         // 只清本应用产生的缓存，绝不触碰用户文件

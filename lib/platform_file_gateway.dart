@@ -36,6 +36,59 @@ class FileGateway {
 
   static bool get _useAndroidSaf => Platform.isAndroid;
 
+  /// 保存方式：dialog=系统对话框 / folder=默认文件夹(APNG_Exporter) / album=相册
+  enum SaveMode { dialog, folder, album }
+
+  /// 保存到相册（iOS PhotoKit / Android MediaStore）
+  static Future<bool> saveToAlbum({
+    required String fileName,
+    required Uint8List data,
+  }) async {
+    final channel = _useAndroidSaf ? _channel : _iosPickerChannel;
+    final ok = await channel.invokeMethod<bool>('saveToAlbum', {
+      'fileName': fileName,
+      'data': data,
+    });
+    return ok ?? false;
+  }
+
+  /// 读取全局保存方式（无设置时默认系统对话框）
+  static Future<SaveMode> loadSaveMode() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final v = prefs.getString('save_mode');
+      return switch (v) {
+        'folder' => SaveMode.folder,
+        'album' => SaveMode.album,
+        _ => SaveMode.dialog,
+      };
+    } catch (_) {
+      return SaveMode.dialog;
+    }
+  }
+
+  /// 按全局保存方式写文件
+  static Future<bool> writeExportSmart({
+    required String fileName,
+    required String mime,
+    required Uint8List data,
+    SaveMode? mode,
+    bool keepOriginal = false,
+  }) async {
+    final m = mode ?? await loadSaveMode();
+    if (m == SaveMode.album) {
+      return saveToAlbum(fileName: fileName, data: data);
+    }
+    if (m == SaveMode.folder) {
+      return writeExport(
+        fileName: fileName, mime: mime, data: data,
+        useCustomDir: true, keepOriginal: keepOriginal);
+    }
+    return writeExport(
+      fileName: fileName, mime: mime, data: data,
+      useCustomDir: false, keepOriginal: keepOriginal);
+  }
+
   /// 单选一张 APNG/PNG 图片，返回可读文件路径；取消返回 null。
   static Future<String?> pickApngFile() async {
     if (_useAndroidSaf) {

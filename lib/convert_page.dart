@@ -311,11 +311,14 @@ class _ConvertPageState extends State<ConvertPage>
     required String mime,
     required Uint8List data,
   }) async {
-    return FileGateway.writeExport(
-      fileName: fileName,
-      mime: mime,
-      data: data,
-      useCustomDir: _useCustomDir,
+    if (_useCustomDir) {
+      return FileGateway.writeExport(
+        fileName: fileName, mime: mime, data: data,
+        useCustomDir: true,
+      );
+    }
+    return FileGateway.writeExportSmart(
+      fileName: fileName, mime: mime, data: data,
     );
   }
 

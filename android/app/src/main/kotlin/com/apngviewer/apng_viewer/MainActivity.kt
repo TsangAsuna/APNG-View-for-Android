@@ -44,6 +44,29 @@ class MainActivity : FlutterActivity() {
                         pendingSaveMime = mime
                         openSaveDialog(name, mime)
                     }
+                    "saveToAlbum" -> {
+                        val data = call.argument<ByteArray>("data") ?: byteArrayOf()
+                        val fileName = call.argument<String>("fileName") ?: "apng_${System.currentTimeMillis()}.png"
+                        try {
+                            val values = android.content.ContentValues().apply {
+                                put(MediaStore.Images.Media.DISPLAY_NAME, fileName)
+                                put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+                                if (android.os.Build.VERSION.SDK_INT >= 29) {
+                                    put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/APNG_Exporter")
+                                }
+                            }
+                            val uri = contentResolver.insert(
+                                MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+                            if (uri != null) {
+                                contentResolver.openOutputStream(uri)?.use { it.write(data) }
+                                result.success(true)
+                            } else {
+                                result.success(false)
+                            }
+                        } catch (e: Exception) {
+                            result.error("SAVE_ALBUM_FAILED", e.message, null)
+                        }
+                    }
                     "writeToDirectory" -> {
                         val fileName = call.argument<String>("fileName") ?: "file.png"
                         val mime = call.argument<String>("mime") ?: "image/png"

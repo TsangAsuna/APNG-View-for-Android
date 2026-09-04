@@ -46,6 +46,66 @@ class _ApngViewerAppState extends State<ApngViewerApp> {
     } catch (_) {}
   }
 
+  Future<void> _showSaveModeSheet(BuildContext context) async {
+    final current = await FileGateway.loadSaveMode();
+    if (!mounted) return;
+    final mode = await showModalBottomSheet<FileGateway.SaveMode>(
+      context: context,
+      builder: (c) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(
+              leading: Icon(Icons.save_alt),
+              title: Text('保存方式'),
+              subtitle: Text('选择后点击保存不再弹位置选择'),
+            ),
+            RadioListTile<FileGateway.SaveMode>(
+              value: FileGateway.SaveMode.dialog,
+              groupValue: current,
+              title: const Text('系统对话框（默认）'),
+              onChanged: (v) => Navigator.pop(c, v),
+            ),
+            RadioListTile<FileGateway.SaveMode>(
+              value: FileGateway.SaveMode.folder,
+              groupValue: current,
+              title: const Text('默认文件夹 APNG_Exporter'),
+              subtitle: const Text('「文件」App → 我的 iPhone 可见'),
+              onChanged: (v) => Navigator.pop(c, v),
+            ),
+            RadioListTile<FileGateway.SaveMode>(
+              value: FileGateway.SaveMode.album,
+              groupValue: current,
+              title: const Text('保存到相册'),
+              onChanged: (v) => Navigator.pop(c, v),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (mode == null || !mounted) return;
+    setState(() {});
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('save_mode', mode.name);
+    } catch (_) {}
+    if (!mounted) return;
+    String label;
+    switch (mode) {
+      case FileGateway.SaveMode.folder:
+        label = '默认文件夹';
+        break;
+      case FileGateway.SaveMode.album:
+        label = '相册';
+        break;
+      default:
+        label = '系统对话框';
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('保存方式已设为: ' + label)),
+    );
+  }
+
   Future<void> _setThemeMode(ThemeMode mode) async {
     setState(() => _themeMode = mode);
     try {
@@ -240,6 +300,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           ],
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.save_outlined),
+            tooltip: '保存方式',
+            onPressed: () => _showSaveModeSheet(context),
+          ),
           IconButton(
             icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
             tooltip: isDark ? '切换到浅色模式' : '切换到深色模式',

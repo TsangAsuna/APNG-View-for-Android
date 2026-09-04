@@ -64,12 +64,11 @@ class _ViewerPageState extends State<ViewerPage> {
       final name = '${base}_frame_${_player!.currentFrame + 1}.png';
       // 超时护栏：iOS UIDocumentPicker 取消时 delegate 回调偶发丢失，
       // 原生 result 永不返回会让 _saving 卡死转圈；30s 兜底强制复位。
-      final ok = await FileGateway.writeExport(
+      final ok = await FileGateway.writeExportSmart(
         fileName: name,
         mime: 'image/png',
         data: frame.pngBytes,
-        useCustomDir: false,
-      ).timeout(const Duration(seconds: 30), onTimeout: () => false);
+      ).timeout(const Duration(seconds: 8), onTimeout: () => false);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(ok ? '已保存第 ${_player!.currentFrame + 1} 帧' : '保存已取消')),
@@ -90,13 +89,12 @@ class _ViewerPageState extends State<ViewerPage> {
     setState(() => _saving = true);
     try {
       final bytes = await File(widget.path).readAsBytes();
-      final ok = await FileGateway.writeExport(
+      final ok = await FileGateway.writeExportSmart(
         fileName: widget.fileName,
         mime: 'image/apng',
         data: bytes,
-        useCustomDir: false,
         keepOriginal: true,
-      ).timeout(const Duration(seconds: 30), onTimeout: () => false);
+      ).timeout(const Duration(seconds: 8), onTimeout: () => false);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(ok ? '已保存原文件' : '保存已取消')),
