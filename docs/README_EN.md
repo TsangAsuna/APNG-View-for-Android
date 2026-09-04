@@ -31,9 +31,17 @@ User
 - **Image → APNG**: multi-select sources (PNG/JPEG/WebP/GIF/BMP), configurable frame delay and loop count; `ApngEncoder` normalizes per-frame dimensions via `copyResize` before encoding.
 - **APNG → Image**: frame extraction to individual PNGs with bulk export to a user-selected directory or per-file system save dialogs.
 
-### Save Guardrails
+### Save Modes & Guardrails
 
-Every export path wraps the native save dialog in a 30-second timeout and `try/finally`, guaranteeing the UI button always resets — a cancelled `UIDocumentPicker` can never leave the UI stuck in a spinner state.
+Three global save modes (toggle from the home screen):
+
+| Mode | Behavior |
+|---|---|
+| System dialog | Native save sheet (cancel/gesture-dismiss both reset the button immediately via delegate callbacks) |
+| Default folder | iOS: `APNG_Exporter/` in Files app; Android: `Pictures/APNG_Exporter` via MediaStore (no SAF grant needed) |
+| Photo album | iOS PhotoKit `PHPhotoLibrary` / Android MediaStore |
+
+Cancelling the system dialog — via the Cancel button **or** swipe-down dismissal — triggers a native callback (`documentPickerWasCancelled` / `presentationControllerDidDismiss`) that resets the UI instantly and shows "File save cancelled". No timeouts are needed; every export path uses `try/finally` so the button always recovers.
 
 ## Feature Highlights
 
@@ -47,9 +55,20 @@ Every export path wraps the native save dialog in a 30-second timeout and `try/f
 - Recent-files history (last 10)
 - External open support (`ACTION_VIEW` / `ACTION_SEND`)
 
-## Interactive Architecture Diagram
+## Architecture Diagram
 
-[Open the interactive signal-flow diagram](docs/architecture.html?theme=light&present=1#view=open-flow) — hover/click components to focus, switch between four signal chains (Open / Play / Convert / Save), toggle light/dark themes, and trace routes.
+![APNG Viewer signal-flow architecture](architecture.png)
+
+### Four Signal Chains
+
+| Chain | Diagram | Description |
+|---|---|---|
+| Open APNG | ![Open chain](architecture-flow-open.png) | Pick file → native multi-core decode → frame cache → Dart render |
+| Play | ![Play chain](architecture-flow-play.png) | Ticker frame scheduling, Image.memory engine decode |
+| Convert | ![Convert chain](architecture-flow-convert.png) | Multi-image RGBA → APNG encode; APNG → per-frame PNG export |
+| Save | ![Save chain](architecture-flow-save.png) | Save current frame / original / frames to dialog, folder, or album |
+
+[Open the interactive signal-flow diagram](architecture.html?theme=light&present=1#view=open-flow) — hover/click components to focus, switch between the four chains above, toggle light/dark themes, and trace routes.
 
 ## Build
 
