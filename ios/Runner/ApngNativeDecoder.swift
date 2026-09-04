@@ -52,17 +52,23 @@ enum ApngNativeDecoder {
             }
         }
 
-        var outPaths: [String] = []
-        for (i, f) in meta.frames.enumerated() {
-            guard let png = decodeFrameToPng(bytes, meta, f) else { return nil }
-            let dest = tmpDir.appendingPathComponent("native_frame_\(i)_\(Int(Date().timeIntervalSince1970 * 1000)).png")
-            do {
-                try png.write(to: dest)
-                outPaths.append(dest.path)
-            } catch {
-                return nil
+        var outPaths = [String](repeating: "", count: meta.frames.count)
+        let lock = NSLock()
+        // 并行解码每一帧（M1/M2 等多核拉满，避免单核瓶颈）
+        DispatchQueue.concurrentPerform(iterations: meta.frames.count) { i in
+            if let png = decodeFrameToPng(bytes, meta, meta.frames[i]) {
+                let dest = tmpDir.appendingPathComponent("native_frame_\(i).png")
+                do {
+                    try png.write(to: dest)
+                    lock.lock()
+                    outPaths[i] = dest.path
+                    lock.unlock()
+                } catch {
+                    // 写失败 → 保持空串，调用方统一判失败回退 Dart
+                }
             }
         }
+        if outPaths.contains("") { return nil }
         return outPaths
     }
 
@@ -316,11 +322,12 @@ enum ApngNativeDecoder {
         // 预估输出：zlib 解压最大约 100x 输入，设 256MB 上限
         let capacity = max(data.count * 8, 1 << 20)
         var output = [UInt8](repeating: 0, count: min(capacity, 256 << 20))
+        let outputCount = output.count
         let written = output.withUnsafeMutableBytes { dst in
             data.withUnsafeBytes { src in
                 compression_decode_buffer(
                     dst.bindMemory(to: UInt8.self).baseAddress!,
-                    output.count,
+                    outputCount,
                     src.bindMemory(to: UInt8.self).baseAddress!,
                     data.count,
                     nil,

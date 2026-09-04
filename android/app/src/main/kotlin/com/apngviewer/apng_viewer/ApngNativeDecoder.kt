@@ -61,14 +61,26 @@ object ApngNativeDecoder {
             ) return null
         }
 
-        val outPaths = ArrayList<String>(meta.frames.size)
-        for ((i, f) in meta.frames.withIndex()) {
-            val png = decodeFrameToPng(bytes, meta, f) ?: return null
-            val dest = File(tmpDir, "native_frame_${i}_${System.nanoTime()}.png")
-            FileOutputStream(dest).use { it.write(png) }
-            outPaths.add(dest.absolutePath)
+        // 并行解码每一帧（8 Gen 3 等多核设备拉满全部核心，避免单核瓶颈）
+        val cpuCount = Runtime.getRuntime().availableProcessors()
+        val executor = java.util.concurrent.Executors.newFixedThreadPool(cpuCount)
+        try {
+            val futures = meta.frames.map { f ->
+                executor.submit<ByteArray?> {
+                    decodeFrameToPng(bytes, meta, f)
+                }
+            }
+            val outPaths = ArrayList<String>(meta.frames.size)
+            for ((i, future) in futures.withIndex()) {
+                val png = future.get() ?: return null
+                val dest = File(tmpDir, "native_frame_${i}_${System.nanoTime()}.png")
+                FileOutputStream(dest).use { it.write(png) }
+                outPaths.add(dest.absolutePath)
+            }
+            outPaths
+        } finally {
+            executor.shutdown()
         }
-        outPaths
     } catch (e: Exception) {
         null
     }
