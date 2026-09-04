@@ -16,6 +16,7 @@ import java.io.FileOutputStream
 class MainActivity : FlutterActivity() {
     private val channelName = "com.apngviewer.apng_viewer/file"
     private val nativeDecodeChannel = "com.apngviewer.apng_viewer/native_decode"
+    private val nativePlayerChannel = "com.apngviewer.apng_viewer/native_player"
     private val pickSingleCode = 1001
     private val pickMultiCode = 1002
     private val pickTreeCode = 1003
@@ -26,6 +27,7 @@ class MainActivity : FlutterActivity() {
     private var pendingSaveData: ByteArray? = null
     private var pendingSaveMime: String? = null
     private var _treeUri: Uri? = null
+    private var nativePlayer: ApngNativePlayer? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -84,6 +86,46 @@ class MainActivity : FlutterActivity() {
                     handleNativeDecode(call, result)
                 } else {
                     result.notImplemented()
+                }
+            }
+        // 原生 APNG 播放通道（对齐 ImageToolbox：原生解码+渲染到 Texture）
+        nativePlayer = ApngNativePlayer(flutterEngine, flutterEngine.renderer)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, nativePlayerChannel)
+            .setMethodCallHandler { call, result ->
+                val p = nativePlayer
+                when (call.method) {
+                    "open" -> {
+                        val path = call.argument<String>("path")
+                        if (path == null || p == null) {
+                            result.success(null)
+                        } else {
+                            p.open(path, result)
+                        }
+                    }
+                    "play" -> { p?.play(); result.success(true) }
+                    "pause" -> { p?.pause(); result.success(true) }
+                    "seekTo" -> {
+                        val idx = call.argument<Int>("frame") ?: 0
+                        p?.seekTo(idx)
+                        result.success(true)
+                    }
+                    "nextFrame" -> { p?.nextFrame(); result.success(true) }
+                    "prevFrame" -> { p?.prevFrame(); result.success(true) }
+                    "setSpeed" -> {
+                        val s = call.argument<Double>("speed") ?: 1.0
+                        p?.setSpeed(s)
+                        result.success(true)
+                    }
+                    "getState" -> result.success(p?.getState() ?: HashMap())
+                    "getCurrentFramePng" -> {
+                        val b = p?.getCurrentFramePng()
+                        if (b == null) result.success(null) else result.success(b)
+                    }
+                    "dispose" -> {
+                        p?.dispose()
+                        result.success(true)
+                    }
+                    else -> result.notImplemented()
                 }
             }
     }

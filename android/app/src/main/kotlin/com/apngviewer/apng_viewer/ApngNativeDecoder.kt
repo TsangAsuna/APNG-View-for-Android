@@ -95,6 +95,17 @@ object ApngNativeDecoder {
         null
     }
 
+    /** 解码单帧为 RGBA 字节（原生播放器用：原生侧转 Bitmap，不跨层） */
+    fun decodeFrameRgba(
+        bytes: ByteArray,
+        meta: ApngMeta,
+        frame: FrameInfo,
+    ): ByteArray? = try {
+        decodeFrameToPng(bytes, meta, frame)
+    } catch (e: Exception) {
+        null
+    }
+
     /** 解析 PNG chunk，收集帧元数据。 */
     private fun parseChunks(bytes: ByteArray): ApngMeta? {
         if (bytes.size < 8) return null

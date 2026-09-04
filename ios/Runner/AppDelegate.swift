@@ -38,6 +38,60 @@ import UniformTypeIdentifiers
     registerImagePickerChannel(engineBridge.pluginRegistry)
     registerIntentChannel(engineBridge.pluginRegistry)
     registerNativeDecodeChannel(engineBridge.pluginRegistry)
+    registerNativePlayerChannel(engineBridge.pluginRegistry)
+  }
+
+  /// 注册原生 APNG 播放通道（原生解码+渲染到 Texture，对齐 ImageToolbox）
+  private func registerNativePlayerChannel(_ registry: FlutterPluginRegistry) {
+    guard let registrar = registry.registrar(forPlugin: "ApngNativePlayer") else {
+      return
+    }
+    let channel = FlutterMethodChannel(
+      name: "com.apngviewer.apng_viewer/native_player",
+      binaryMessenger: registrar.messenger()
+    )
+    let textures = registrar.textures()
+    var player: ApngNativePlayer?
+    channel.setMethodCallHandler { call, result in
+      switch call.method {
+      case "open":
+        let args = call.arguments as? [String: Any] ?? [:]
+        guard let path = args["path"] as? String, !path.isEmpty else {
+          result(nil); return
+        }
+        player = ApngNativePlayer(registry: textures)
+        player!.open(path: path, result: result)
+      case "play":
+        player?.play(); result(true)
+      case "pause":
+        player?.pause(); result(true)
+      case "seekTo":
+        let args = call.arguments as? [String: Any] ?? [:]
+        player?.seekTo(frame: (args["frame"] as? Int) ?? 0)
+        result(true)
+      case "nextFrame":
+        player?.nextFrame(); result(true)
+      case "prevFrame":
+        player?.prevFrame(); result(true)
+      case "setSpeed":
+        let args = call.arguments as? [String: Any] ?? [:]
+        player?.setSpeed((args["speed"] as? Double) ?? 1.0)
+        result(true)
+      case "getState":
+        result(player?.getState() ?? [:])
+      case "getCurrentFramePng":
+        let d = player?.getCurrentFramePng()
+        if let d = d {
+          result(FlutterStandardTypedData(bytes: d))
+        } else {
+          result(nil)
+        }
+      case "dispose":
+        player?.dispose(); player = nil; result(true)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
   }
 
   /// 注册原生 APNG 解码通道（Dart decodeAsync 优先调用，秒开大图）

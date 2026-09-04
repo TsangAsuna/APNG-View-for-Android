@@ -78,6 +78,13 @@ enum ApngNativeDecoder {
         return parseChunks(bytes)
     }
 
+    /// 解码单帧为 RGBA 字节（原生播放器用：原生侧转 CGImage，不跨层）
+    static func decodeFrameRgba(
+        bytes: Data, meta: ApngMeta, frame: FrameInfo
+    ) -> Data? {
+        decodeFrameToPng(bytes, meta, frame)
+    }
+
     // MARK: - Chunk 解析
 
     private static func parseChunks(_ bytes: Data) -> ApngMeta? {

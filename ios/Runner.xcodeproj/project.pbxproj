@@ -18,6 +18,7 @@
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
 		C0FFEE010203040506070809 /* CustomPhotoPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE01020304050607080A /* CustomPhotoPicker.swift */; };
 		D0FFEE010203040506070809 /* ApngNativeDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0FFEE01020304050607080A /* ApngNativeDecoder.swift */; };
+		E0FFEE010203040506070809 /* ApngNativePlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0FFEE01020304050607080A /* ApngNativePlayer.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -63,6 +64,7 @@
 		97C147021CF9000F007C117D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		C0FFEE01020304050607080A /* CustomPhotoPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomPhotoPicker.swift; sourceTree = "<group>"; };
 		D0FFEE01020304050607080A /* ApngNativeDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApngNativeDecoder.swift; sourceTree = "<group>"; };
+		E0FFEE01020304050607080A /* ApngNativePlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApngNativePlayer.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -129,6 +131,7 @@
 				7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */,
 				C0FFEE01020304050607080A /* CustomPhotoPicker.swift */,
 				D0FFEE01020304050607080A /* ApngNativeDecoder.swift */,
+				E0FFEE01020304050607080A /* ApngNativePlayer.swift */,
 				74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */,
 			);
 			path = Runner;
@@ -292,6 +295,7 @@
 				7884E8682EC3CC0700C636F2 /* SceneDelegate.swift in Sources */,
 				C0FFEE010203040506070809 /* CustomPhotoPicker.swift in Sources */,
 				D0FFEE010203040506070809 /* ApngNativeDecoder.swift in Sources */,
+				E0FFEE010203040506070809 /* ApngNativePlayer.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
