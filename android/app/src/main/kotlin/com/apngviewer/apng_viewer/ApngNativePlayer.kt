@@ -162,7 +162,8 @@ class ApngNativePlayer(
             } catch (_: Exception) {
             }
         }
-        textureEntry?.markDirty()
+        // unlockCanvasAndPost 后 SurfaceTexture 有新帧，Flutter 引擎通过
+        // setOnFrameAvailableListener 自动重绘 Texture，无需手动 markDirty
     }
 
     fun play() {
