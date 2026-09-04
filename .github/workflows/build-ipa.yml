@@ -65,9 +65,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: APNG 阅览器 iOS ${{ github.ref_name }}
+          name: APNG 阅览器 ${{ github.ref_name }}
           body: |
-            ## APNG 阅览器 iOS ${{ github.ref_name }}
+            ## APNG 阅览器 ${{ github.ref_name }}
             - 未签名 .ipa，适用于 TrollStore / 越狱环境
             - 支持 iPad Pro 12.9 寸全方向旋转与多任务缩放
             - 从「文件」App 打开 APNG/PNG（file_picker）
