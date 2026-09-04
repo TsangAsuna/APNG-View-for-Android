@@ -64,7 +64,7 @@ class ApngFrame {
       final im = img.Image.fromBytes(
         width: width,
         height: height,
-        bytes: img.ByteBuffer.view(r.buffer),
+        bytes: r.buffer,
         numChannels: 4,
       );
       return Uint8List.fromList(img.encodePng(im));

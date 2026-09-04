@@ -1,0 +1,75 @@
+﻿2026-09-04T09:32:16.4170020Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-09-04T09:32:16.4178180Z ##[group]Run actions/checkout@v4
+2026-09-04T09:32:16.4178940Z with:
+2026-09-04T09:32:16.4179550Z   repository: TsangAsuna/APNG-View-for-Android
+2026-09-04T09:32:16.4185270Z   token: ***
+2026-09-04T09:32:16.4185800Z   ssh-strict: true
+2026-09-04T09:32:16.4186360Z   ssh-user: git
+2026-09-04T09:32:16.4186920Z   persist-credentials: true
+2026-09-04T09:32:16.4187690Z   clean: true
+2026-09-04T09:32:16.4229230Z   sparse-checkout-cone-mode: true
+2026-09-04T09:32:16.4230030Z   fetch-depth: 1
+2026-09-04T09:32:16.4230620Z   fetch-tags: false
+2026-09-04T09:32:16.4231200Z   show-progress: true
+2026-09-04T09:32:16.4231770Z   lfs: false
+2026-09-04T09:32:16.4232310Z   submodules: false
+2026-09-04T09:32:16.4232950Z   set-safe-directory: true
+2026-09-04T09:32:16.4233590Z   allow-unsafe-pr-checkout: false
+2026-09-04T09:32:16.4235040Z ##[endgroup]
+2026-09-04T09:32:16.8690820Z Syncing repository: TsangAsuna/APNG-View-for-Android
+2026-09-04T09:32:16.8696740Z ##[group]Getting Git version info
+2026-09-04T09:32:16.8700400Z Working directory is '/Users/runner/work/APNG-View-for-Android/APNG-View-for-Android'
+2026-09-04T09:32:16.8705160Z [command]/opt/homebrew/bin/git version
+2026-09-04T09:32:16.8959700Z git version 2.55.0
+2026-09-04T09:32:16.8978200Z ##[endgroup]
+2026-09-04T09:32:16.8985750Z Copying '/Users/runner/.gitconfig' to '/Users/runner/work/_temp/86c188e2-768a-4755-a123-215dd8b3546b/.gitconfig'
+2026-09-04T09:32:16.8998480Z Temporarily overriding HOME='/Users/runner/work/_temp/86c188e2-768a-4755-a123-215dd8b3546b' before making global git config changes
+2026-09-04T09:32:16.9003440Z Adding repository directory to the temporary git global config as a safe directory
+2026-09-04T09:32:16.9007830Z [command]/opt/homebrew/bin/git config --global --add safe.directory /Users/runner/work/APNG-View-for-Android/APNG-View-for-Android
+2026-09-04T09:32:16.9138870Z Deleting the contents of '/Users/runner/work/APNG-View-for-Android/APNG-View-for-Android'
+2026-09-04T09:32:16.9144000Z ##[group]Initializing the repository
+2026-09-04T09:32:16.9146810Z [command]/opt/homebrew/bin/git init /Users/runner/work/APNG-View-for-Android/APNG-View-for-Android
+2026-09-04T09:32:16.9484760Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-09-04T09:32:16.9489500Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-09-04T09:32:16.9492860Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-09-04T09:32:16.9495720Z hint: call:
+2026-09-04T09:32:16.9497060Z hint:
+2026-09-04T09:32:16.9498630Z hint: 	git config --global init.defaultBranch <name>
+2026-09-04T09:32:16.9499550Z hint:
+2026-09-04T09:32:16.9500320Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-09-04T09:32:16.9501480Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-09-04T09:32:16.9502410Z hint:
+2026-09-04T09:32:16.9502950Z hint: 	git branch -m <name>
+2026-09-04T09:32:16.9503570Z hint:
+2026-09-04T09:32:16.9504340Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-09-04T09:32:16.9505790Z Initialized empty Git repository in /Users/runner/work/APNG-View-for-Android/APNG-View-for-Android/.git/
+2026-09-04T09:32:16.9508550Z [command]/opt/homebrew/bin/git remote add origin https://github.com/TsangAsuna/APNG-View-for-Android
+2026-09-04T09:32:16.9598780Z ##[endgroup]
+2026-09-04T09:32:16.9601520Z ##[group]Disabling automatic garbage collection
+2026-09-04T09:32:16.9605630Z [command]/opt/homebrew/bin/git config --local gc.auto 0
+2026-09-04T09:32:16.9684640Z ##[endgroup]
+2026-09-04T09:32:16.9685710Z ##[group]Setting up auth
+2026-09-04T09:32:16.9687070Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-09-04T09:32:16.9767790Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-09-04T09:32:17.0882690Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-09-04T09:32:17.0978530Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-09-04T09:32:17.1979380Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-09-04T09:32:17.2250480Z [command]/opt/homebrew/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-09-04T09:32:17.3394500Z [command]/opt/homebrew/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-09-04T09:32:17.3478240Z ##[endgroup]
+2026-09-04T09:32:17.3480690Z ##[group]Fetching the repository
+2026-09-04T09:32:17.3485430Z [command]/opt/homebrew/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +e553916f4d1aae922179c40a5871d16e5a8a99d4:refs/remotes/origin/main
+2026-09-04T09:32:18.1946090Z From https://github.com/TsangAsuna/APNG-View-for-Android
+2026-09-04T09:32:18.1947150Z  * [new ref]         e553916f4d1aae922179c40a5871d16e5a8a99d4 -> origin/main
+2026-09-04T09:32:18.1954800Z ##[endgroup]
+2026-09-04T09:32:18.1955340Z ##[group]Determining the checkout info
+2026-09-04T09:32:18.1957860Z ##[endgroup]
+2026-09-04T09:32:18.1966910Z [command]/opt/homebrew/bin/git sparse-checkout disable
+2026-09-04T09:32:18.2058500Z [command]/opt/homebrew/bin/git config --local --unset-all extensions.worktreeConfig
+2026-09-04T09:32:18.2132730Z ##[group]Checking out the ref
+2026-09-04T09:32:18.2137760Z [command]/opt/homebrew/bin/git checkout --progress --force -B main refs/remotes/origin/main
+2026-09-04T09:32:18.2510290Z Switched to a new branch 'main'
+2026-09-04T09:32:18.2515990Z branch 'main' set up to track 'origin/main'.
+2026-09-04T09:32:18.2554830Z ##[endgroup]
+2026-09-04T09:32:18.2631630Z [command]/opt/homebrew/bin/git log -1 --format=%H
+2026-09-04T09:32:18.2687470Z e553916f4d1aae922179c40a5871d16e5a8a99d4

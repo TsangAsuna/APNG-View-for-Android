@@ -1,0 +1,20 @@
+﻿2026-09-04T09:33:01.9519990Z ##[group]Run flutter analyze
+2026-09-04T09:33:01.9520330Z [36;1mflutter analyze[0m
+2026-09-04T09:33:01.9553380Z shell: /bin/bash -e {0}
+2026-09-04T09:33:01.9553620Z env:
+2026-09-04T09:33:01.9553950Z   FLUTTER_ROOT: /Users/runner/hostedtoolcache/flutter/stable-3.47.2-arm64/flutter
+2026-09-04T09:33:01.9554340Z   PUB_CACHE: /Users/runner/.pub-cache
+2026-09-04T09:33:01.9554560Z ##[endgroup]
+2026-09-04T09:33:02.2677420Z Resolving dependencies...
+2026-09-04T09:33:02.3155830Z Downloading packages...
+2026-09-04T09:33:02.3577180Z   material_color_utilities 0.13.0 (0.13.1 available)
+2026-09-04T09:33:02.3577820Z   test_api 0.7.12 (0.7.14 available)
+2026-09-04T09:33:02.3578350Z Got dependencies!
+2026-09-04T09:33:02.3579170Z 2 packages have newer versions incompatible with dependency constraints.
+2026-09-04T09:33:02.3579940Z Try `flutter pub outdated` for more information.
+2026-09-04T09:33:12.4539110Z Analyzing APNG-View-for-Android...                              
+2026-09-04T09:33:12.4599520Z 
+2026-09-04T09:33:12.4623320Z   error • The name 'ByteBuffer' is being referenced through the prefix 'img', but it isn't defined in any of the libraries imported using that prefix. Try correcting the prefix or importing the library that defines 'ByteBuffer' • lib/apng/apng_decoder.dart:67:20 • undefined_prefixed_name
+2026-09-04T09:33:12.4624430Z 
+2026-09-04T09:33:12.4637680Z 1 issue found. (ran in 9.2s)
+2026-09-04T09:33:12.4694030Z ##[error]Process completed with exit code 1.

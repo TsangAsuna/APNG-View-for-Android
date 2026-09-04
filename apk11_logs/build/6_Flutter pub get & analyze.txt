@@ -1,0 +1,30 @@
+﻿2026-09-04T09:31:42.2706423Z ##[group]Run flutter pub get
+2026-09-04T09:31:42.2706797Z [36;1mflutter pub get[0m
+2026-09-04T09:31:42.2707058Z [36;1mflutter analyze[0m
+2026-09-04T09:31:42.2745793Z shell: /usr/bin/bash -e {0}
+2026-09-04T09:31:42.2746082Z env:
+2026-09-04T09:31:42.2746420Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-09-04T09:31:42.2746955Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-09-04T09:31:42.2747488Z   FLUTTER_ROOT: /opt/hostedtoolcache/flutter/stable-3.47.2-x64/flutter
+2026-09-04T09:31:42.2747885Z   PUB_CACHE: /home/runner/.pub-cache
+2026-09-04T09:31:42.2748169Z ##[endgroup]
+2026-09-04T09:31:42.8431807Z Resolving dependencies...
+2026-09-04T09:31:42.8823629Z Downloading packages...
+2026-09-04T09:31:42.9158919Z   material_color_utilities 0.13.0 (0.13.1 available)
+2026-09-04T09:31:42.9159647Z   test_api 0.7.12 (0.7.14 available)
+2026-09-04T09:31:42.9160364Z Got dependencies!
+2026-09-04T09:31:42.9161615Z 2 packages have newer versions incompatible with dependency constraints.
+2026-09-04T09:31:42.9162517Z Try `flutter pub outdated` for more information.
+2026-09-04T09:31:43.2649671Z Resolving dependencies...
+2026-09-04T09:31:43.3030299Z Downloading packages...
+2026-09-04T09:31:43.3376379Z   material_color_utilities 0.13.0 (0.13.1 available)
+2026-09-04T09:31:43.3377101Z   test_api 0.7.12 (0.7.14 available)
+2026-09-04T09:31:43.3377592Z Got dependencies!
+2026-09-04T09:31:43.3379322Z 2 packages have newer versions incompatible with dependency constraints.
+2026-09-04T09:31:43.3380132Z Try `flutter pub outdated` for more information.
+2026-09-04T09:31:52.3433011Z Analyzing APNG-View-for-Android...                              
+2026-09-04T09:31:52.3438860Z 
+2026-09-04T09:31:52.3478529Z   error • The name 'ByteBuffer' is being referenced through the prefix 'img', but it isn't defined in any of the libraries imported using that prefix. Try correcting the prefix or importing the library that defines 'ByteBuffer' • lib/apng/apng_decoder.dart:67:20 • undefined_prefixed_name
+2026-09-04T09:31:52.3487406Z 
+2026-09-04T09:31:52.3552078Z 1 issue found. (ran in 8.5s)
+2026-09-04T09:31:52.3625308Z ##[error]Process completed with exit code 1.
