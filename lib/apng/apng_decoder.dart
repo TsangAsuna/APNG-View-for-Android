@@ -35,36 +35,50 @@ class ApngInfo {
 /// 解码完成的 APNG 帧数据
 ///
 /// 两种载荷（二选一）：
-/// - [rgbaBytes]：原生解码直出的 RGBA 裸像素（绕过 PNG 编解码，秒开关键）
+/// - [rgbaPath]：原生直出 .rgba 裸像素文件路径（懒加载：播放时按需读盘，
+///   避免 44 帧 RGBA 全量驻内存导致闪退；秒开关键）
 /// - [pngBytes]：纯 Dart 解码输出的 PNG 压缩字节（内存友好，渲染由引擎解码）
 class ApngFrame {
   final Uint8List? pngBytes; // PNG 压缩字节（纯 Dart 回退路径）
-  final Uint8List? rgbaBytes; // RGBA 裸像素（原生路径）
+  final String? rgbaPath; // RGBA 裸像素文件路径（原生路径，懒加载）
   final int width;
   final int height;
   final int durationMs;
 
   ApngFrame({
     this.pngBytes,
-    this.rgbaBytes,
+    this.rgbaPath,
     required this.width,
     required this.height,
     required this.durationMs,
-  }) : assert(pngBytes != null || rgbaBytes != null,
-            '必须提供 pngBytes 或 rgbaBytes 之一');
+  }) : assert(pngBytes != null || rgbaPath != null,
+            '必须提供 pngBytes 或 rgbaPath 之一');
+
+  /// 按需读取 RGBA 裸像素（原生路径）：仅播放器切帧时调用，
+  /// 单帧 ~5.6MB 磁盘读取 <10ms，避免全量驻留内存。
+  Future<Uint8List?> loadRgbaBytes() async {
+    final p = rgbaPath;
+    if (p == null) return null;
+    try {
+      return await File(p).readAsBytes();
+    } catch (_) {
+      return null;
+    }
+  }
 
   /// 导出/保存用：返回可写盘的 PNG 字节。
   /// 原生 RGBA 帧在此惰性编码（仅保存时开销，不影响播放）。
   Uint8List get exportPng {
     final p = pngBytes;
     if (p != null) return p;
-    final r = rgbaBytes;
+    final r = rgbaPath;
     if (r == null) return Uint8List(0);
     try {
+      final raw = File(r).readAsBytesSync();
       final im = img.Image.fromBytes(
         width: width,
         height: height,
-        bytes: r.buffer,
+        bytes: raw.buffer,
         numChannels: 4,
       );
       return Uint8List.fromList(img.encodePng(im));
@@ -164,11 +178,11 @@ class ApngDecoder {
 
     final frames = <ApngFrame>[];
     for (var i = 0; i < paths.length; i++) {
-      final fbytes = await File(paths[i]).readAsBytes();
-      // 原生直出 .rgba 裸像素 → decodeImageFromPixels 直渲（秒开）
+      // 懒加载：只存路径，不读字节（44 帧 RGBA 全量读入 = 246MB I/O = 21s
+      // 且内存翻倍闪退的根因）。播放器切帧时按需 loadRgbaBytes()。
       if (paths[i].endsWith('.rgba')) {
         frames.add(ApngFrame(
-          rgbaBytes: fbytes,
+          rgbaPath: paths[i],
           width: width,
           height: height,
           durationMs: i < durations.length ? durations[i] : 100,
@@ -176,7 +190,7 @@ class ApngDecoder {
       } else {
         // 兼容旧 .png 帧文件（老缓存）
         frames.add(ApngFrame(
-          pngBytes: fbytes,
+          pngBytes: await File(paths[i]).readAsBytes(),
           width: width,
           height: height,
           durationMs: i < durations.length ? durations[i] : 100,

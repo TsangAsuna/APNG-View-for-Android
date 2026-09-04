@@ -562,7 +562,8 @@ class _ConvertPageState extends State<ConvertPage>
               final f = p.currentFrameData;
               if (f == null) return const SizedBox.shrink();
               return ApngFrameView(
-                rgbaBytes: f.rgbaBytes,
+                rgbaPath: f.rgbaPath,
+                rgbaLoader: f.loadRgbaBytes,
                 pngBytes: f.pngBytes,
                 rgbaWidth: f.width,
                 rgbaHeight: f.height,
@@ -725,7 +726,8 @@ class _ConvertPageState extends State<ConvertPage>
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(8),
                               child: ApngFrameView(
-                                rgbaBytes: f.rgbaBytes,
+                                rgbaPath: f.rgbaPath,
+                                rgbaLoader: f.loadRgbaBytes,
                                 pngBytes: f.pngBytes,
                                 rgbaWidth: f.width,
                                 rgbaHeight: f.height,

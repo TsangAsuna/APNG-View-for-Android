@@ -234,7 +234,8 @@ class _ViewerPageState extends State<ViewerPage> {
           maxScale: 8.0,
           child: Center(
             child: ApngFrameView(
-              rgbaBytes: f.rgbaBytes,
+              rgbaPath: f.rgbaPath,
+              rgbaLoader: f.loadRgbaBytes,
               pngBytes: f.pngBytes,
               rgbaWidth: f.width,
               rgbaHeight: f.height,
