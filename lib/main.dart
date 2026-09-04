@@ -128,7 +128,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               value: SaveMode.folder,
               groupValue: current,
               title: const Text('默认文件夹 APNG_Exporter'),
-              subtitle: const Text('「文件」App → 我的 iPhone 可见'),
+              subtitle: const Text('「文件」App → 我的 iPad 可见'),
               onChanged: (v) => Navigator.pop(c, v),
             ),
             RadioListTile<SaveMode>(
@@ -147,21 +147,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('save_mode', mode.name);
     } catch (_) {}
-    if (!mounted) return;
-    String label;
-    switch (mode) {
-      case SaveMode.folder:
-        label = '默认文件夹';
-        break;
-      case SaveMode.album:
-        label = '相册';
-        break;
-      default:
-        label = '系统对话框';
-    }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('保存方式已设为: ' + label)),
-    );
   }
 
   @override
