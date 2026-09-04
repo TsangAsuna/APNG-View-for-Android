@@ -118,9 +118,9 @@ class CustomPhotoPickerViewController: UIViewController,
     // 缩略图尺寸按网格 1/3 宽（@2x/@3x 由系统处理），避免全尺寸解码
     let side = (view.bounds.width - 2 * (columns - 1)) / columns
     thumbnailSize = CGSize(width: side, height: side)
-    // 预取前两屏
+    // 预取前两屏（3 列 × 18 行 = 54 个）
     imageManager.allowsCachingHighQualityImages = false
-    let firstBatch = min(assets?.count ?? 0, columns * 18)
+    let firstBatch = min(assets?.count ?? 0, Int(columns) * 18)
     if firstBatch > 0 {
       let idxs = (0..<firstBatch).map { IndexPath(item: $0, section: 0) }
       collectionView.prefetchItems(at: idxs)
