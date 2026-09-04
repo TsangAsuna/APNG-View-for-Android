@@ -67,8 +67,8 @@ jobs:
         run: flutter test
 
       # 7. 构建 Release APK
-      - name: Build APK
-        run: flutter build apk --release
+      - name: Build APK (split per ABI)
+        run: flutter build apk --release --split-per-abi
 
       # 8.（可选）构建 App Bundle，用于上架 Google Play
       - name: Build App Bundle (AAB)
@@ -99,6 +99,8 @@ jobs:
             - 适配 Android 16 (API 36)
             - 应用图标：APNG 主题自定义图标
           files: |
-            build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+            build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
+            build/app/outputs/flutter-apk/app-x86_64-release.apk
             build/app/outputs/bundle/release/*.aab
           generate_release_notes: true

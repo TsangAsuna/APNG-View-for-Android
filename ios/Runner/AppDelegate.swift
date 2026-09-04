@@ -277,6 +277,9 @@ import UniformTypeIdentifiers
       let handler = SaveExportHandler(fileURL: tmp, completion: completion)
       objc_setAssociatedObject(picker, &SaveExportHandler.assocKey, handler, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
       picker.delegate = handler
+      // 手势下滑/触摸空白关闭 picker 时不触发 documentPickerWasCancelled，
+      // 但会触发 presentationControllerDidDismiss -> finish(false)
+      picker.presentationController?.delegate = handler
       topVC.present(picker, animated: true)
     }
   }
@@ -382,6 +385,11 @@ class SaveExportHandler: NSObject, UIDocumentPickerDelegate {
   }
 
   func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+    finish(false)
+  }
+
+  /// 手势下滑 / 触摸空白关闭 picker（iOS 15 不触发 documentPickerWasCancelled）
+  func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
     finish(false)
   }
 }
