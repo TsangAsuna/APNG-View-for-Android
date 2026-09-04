@@ -92,10 +92,10 @@ import UniformTypeIdentifiers
               try? fm.createDirectory(at: tmpDir, withIntermediateDirectories: true)
               log("cacheKey=\(cacheKey) exists=\(fm.fileExists(atPath: tmpDir.path))")
 
-              // 缓存命中（frame_0.rgba 存在且帧数对得上）→ 直接复用，零解码秒开
+              // 缓存命中（frame_0.png 存在且帧数对得上）→ 直接复用，零解码秒开
               let frameCount = ApngNativeDecoder.peekMeta(path: path)?.frames.count ?? 0
               let cached = (try? fm.contentsOfDirectory(atPath: tmpDir.path))?
-                .filter { $0.hasPrefix("frame_") && $0.hasSuffix(".rgba") }
+                .filter { $0.hasPrefix("frame_") && ($0.hasSuffix(".png") || $0.hasSuffix(".rgba")) }
                 .sorted() ?? []
               log("frameCount=\(frameCount) cached=\(cached.count)")
               let framePaths: [String]?

@@ -329,14 +329,23 @@ class _ConvertPageState extends State<ConvertPage>
       _snack('请先选择导出目录');
       return;
     }
-    final base = _srcImages.first.sourceName;
-    final name = '${base.substring(0, base.lastIndexOf('.'))}_apng.apng';
-    final ok = await _writeFile(
-      fileName: name,
-      mime: 'image/apng',
-      data: data,
-    );
-    if (ok) _snack('APNG 已导出: $name');
+    setState(() => _converting = true);
+    try {
+      final base = _srcImages.first.sourceName;
+      final name = '${base.substring(0, base.lastIndexOf('.'))}_apng.apng';
+      final ok = await _writeFile(
+        fileName: name,
+        mime: 'image/apng',
+        data: data,
+      );
+      if (!mounted) return;
+      if (ok) _snack('APNG 已导出: $name');
+    } catch (e) {
+      if (mounted) _snack('导出失败: $e');
+    } finally {
+      // 取消保存弹窗/异常都要复位，否则按钮永远转圈
+      if (mounted) setState(() => _converting = false);
+    }
   }
 
   Future<void> _exportFrames() async {
@@ -352,20 +361,26 @@ class _ConvertPageState extends State<ConvertPage>
 
     if (_useCustomDir) {
       setState(() => _converting = true);
-      var count = 0;
-      for (var i = 0; i < result.frames.length; i++) {
-        // 解码时已生成 PNG 压缩字节，直接复用，无需重复编码
-        final ok = await FileGateway.writeExport(
-          fileName: '${_baseName()}_frame_${i + 1}.png',
-          mime: 'image/png',
-          data: result.frames[i].pngBytes,
-          useCustomDir: true,
-        );
-        if (ok) count++;
+      try {
+        var count = 0;
+        for (var i = 0; i < result.frames.length; i++) {
+          // 解码时已生成 PNG 压缩字节，直接复用，无需重复编码
+          final ok = await FileGateway.writeExport(
+            fileName: '${_baseName()}_frame_${i + 1}.png',
+            mime: 'image/png',
+            data: result.frames[i].pngBytes,
+            useCustomDir: true,
+          );
+          if (ok) count++;
+        }
+        if (!mounted) return;
+        _snack('已导出 $count/${result.frames.length} 帧到所选目录');
+      } catch (e) {
+        if (mounted) _snack('导出失败: $e');
+      } finally {
+        // 取消保存弹窗/异常都要复位
+        if (mounted) setState(() => _converting = false);
       }
-      if (!mounted) return;
-      setState(() => _converting = false);
-      _snack('已导出 $count/${result.frames.length} 帧到所选目录');
     } else {
       if (result.frames.length > 1) {
         final go = await showDialog<bool>(
@@ -389,18 +404,24 @@ class _ConvertPageState extends State<ConvertPage>
         if (go != true) return;
       }
       setState(() => _converting = true);
-      var count = 0;
-      for (var i = 0; i < result.frames.length; i++) {
-        final ok = await _writeFile(
-          fileName: '${_baseName()}_frame_${i + 1}.png',
-          mime: 'image/png',
-          data: result.frames[i].pngBytes,
-        );
-        if (ok) count++;
+      try {
+        var count = 0;
+        for (var i = 0; i < result.frames.length; i++) {
+          final ok = await _writeFile(
+            fileName: '${_baseName()}_frame_${i + 1}.png',
+            mime: 'image/png',
+            data: result.frames[i].pngBytes,
+          );
+          if (ok) count++;
+        }
+        if (!mounted) return;
+        _snack('已导出 $count/${result.frames.length} 帧');
+      } catch (e) {
+        if (mounted) _snack('导出失败: $e');
+      } finally {
+        // 取消保存弹窗/异常都要复位
+        if (mounted) setState(() => _converting = false);
       }
-      if (!mounted) return;
-      setState(() => _converting = false);
-      _snack('已导出 $count/${result.frames.length} 帧');
     }
   }
 

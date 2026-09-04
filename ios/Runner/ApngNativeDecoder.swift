@@ -1,14 +1,13 @@
 import Foundation
 import Compression
+import ImageIO
+import UniformTypeIdentifiers
 
-/// 轻量原生 APNG 解码器（自研，不依赖 ImageIO）。
+/// 轻量原生 APNG 解码器。
 ///
-/// iOS 15 的 ImageIO 对 APNG 只返回 count=1（当静态图处理），无法逐帧取图。
-/// 因此与 Android 端一致，自研解析：系统 Compression/zlib 解压 + 行滤波还原，
-/// 每帧输出 PNG 字节。速度远快于纯 Dart（ImageToolbox 同思路）。
-///
-/// 支持：8-bit 灰度/RGB/RGBA/索引色，非隔行；帧为全尺寸 source-blend。
-/// 复杂帧（偏移/叠加/隔行/16bit）返回 nil → Dart 回退。
+/// 解码走系统 ImageIO（CGImageSource 逐帧），输出每帧 PNG 到缓存目录；
+/// 元数据（帧数/延迟/尺寸）仍用自研 parseChunks（与 Android 一致）。
+/// 自研 zlib 路径仅作兜底（ImageIO 对极少数编码器返回 count=1 时）。
 enum ApngNativeDecoder {
 
     struct FrameInfo {
@@ -38,54 +37,104 @@ enum ApngNativeDecoder {
 
     /// 解码 APNG 文件，每帧输出 PNG 到 tmp，返回路径列表；不支持返回 nil
     static func decode(path: String, tmpDir: URL) -> [String]? {
-      guard let bytes = try? Data(contentsOf: URL(fileURLWithPath: path)) else {
-        NSLog("[ApngNativeDecoder] FAIL: cannot read file")
-        return nil
-      }
-      guard let meta = parseChunks(bytes) else {
-        NSLog("[ApngNativeDecoder] FAIL: parseChunks nil")
-        return nil
-      }
-      // 仅支持非隔行、8-bit、多帧
-      guard meta.interlace == 0, meta.bitDepth == 8, meta.frames.count >= 2 else {
-        NSLog("[ApngNativeDecoder] FAIL: interlace=\(meta.interlace) bitDepth=\(meta.bitDepth) frames=\(meta.frames.count)")
-        return nil
-      }
-      // 仅支持全尺寸 source-blend 帧（最常见）；否则回退 Dart 完整合成
-      for f in meta.frames {
-        if f.xOffset != 0 || f.yOffset != 0 ||
-          f.width != meta.width || f.height != meta.height ||
-          f.blendOp != 0 {
-          NSLog("[ApngNativeDecoder] FAIL: complex frame x=\(f.xOffset) y=\(f.yOffset) w=\(f.width) h=\(f.height) blend=\(f.blendOp) canvas=\(meta.width)x\(meta.height)")
-          return nil
+        guard let bytes = try? Data(contentsOf: URL(fileURLWithPath: path)) else {
+            NSLog("[ApngNativeDecoder] FAIL: cannot read file")
+            return nil
         }
-      }
-      NSLog("[ApngNativeDecoder] decode start frames=\(meta.frames.count) size=\(meta.width)x\(meta.height)")
+        guard let meta = parseChunks(bytes) else {
+            NSLog("[ApngNativeDecoder] FAIL: parseChunks nil")
+            return nil
+        }
+        guard meta.frames.count >= 2 else {
+            NSLog("[ApngNativeDecoder] FAIL: frames=\(meta.frames.count) (<2)")
+            return nil
+        }
+        NSLog("[ApngNativeDecoder] decode start frames=\(meta.frames.count) size=\(meta.width)x\(meta.height)")
 
-      var outPaths = [String](repeating: "", count: meta.frames.count)
-      let lock = NSLock()
-      // 并行解码每一帧（M1/M2 等多核拉满，避免单核瓶颈）
-      DispatchQueue.concurrentPerform(iterations: meta.frames.count) { i in
-        if let rgba = decodeFrameToPng(bytes, meta, meta.frames[i]) {
-          let dest = tmpDir.appendingPathComponent("frame_\(i).rgba")
-          do {
-            try rgba.write(to: dest)
-            lock.lock()
-            outPaths[i] = dest.path
-            lock.unlock()
-          } catch {
-            NSLog("[ApngNativeDecoder] FAIL: write frame_\(i) err=\(error)")
-          }
-        } else {
-          NSLog("[ApngNativeDecoder] FAIL: decodeFrameToPng frame_\(i)")
+        // 主路径：系统 ImageIO 逐帧解码（支持 APNG 帧枚举、blend/dispose 合成）
+        if let paths = decodeViaImageIO(bytes: bytes, frameCount: meta.frames.count, tmpDir: tmpDir) {
+            NSLog("[ApngNativeDecoder] decode done (ImageIO) frames=\(paths.count) dir=\(tmpDir.path)")
+            return paths
         }
-      }
-      if outPaths.contains("") {
-        NSLog("[ApngNativeDecoder] FAIL: incomplete frames \(outPaths.filter { $0 == "" }.count)/\(outPaths.count)")
-        return nil
-      }
-      NSLog("[ApngNativeDecoder] decode done frames=\(outPaths.count) dir=\(tmpDir.path)")
-      return outPaths
+        NSLog("[ApngNativeDecoder] ImageIO unavailable, fallback self-decoder")
+
+        // 兜底：自研 zlib + 行滤波（全尺寸 source-blend 帧）
+        guard meta.interlace == 0, meta.bitDepth == 8 else {
+            NSLog("[ApngNativeDecoder] FAIL: self-decoder interlace/bitDepth unsupported")
+            return nil
+        }
+        for f in meta.frames {
+            if f.xOffset != 0 || f.yOffset != 0 ||
+                f.width != meta.width || f.height != meta.height ||
+                f.blendOp != 0 {
+                NSLog("[ApngNativeDecoder] FAIL: self-decoder complex frame (fallback Dart)")
+                return nil
+            }
+        }
+        var outPaths = [String](repeating: "", count: meta.frames.count)
+        let lock = NSLock()
+        DispatchQueue.concurrentPerform(iterations: meta.frames.count) { i in
+            if let png = selfDecodeFrameToPng(bytes, meta, meta.frames[i]) {
+                let dest = tmpDir.appendingPathComponent("frame_\(i).png")
+                do {
+                    try png.write(to: dest)
+                    lock.lock()
+                    outPaths[i] = dest.path
+                    lock.unlock()
+                } catch {
+                    NSLog("[ApngNativeDecoder] FAIL: write frame_\(i) err=\(error)")
+                }
+            } else {
+                NSLog("[ApngNativeDecoder] FAIL: selfDecodeFrameToPng frame_\(i)")
+            }
+        }
+        if outPaths.contains("") {
+            NSLog("[ApngNativeDecoder] FAIL: incomplete frames \(outPaths.filter { $0 == "" }.count)/\(outPaths.count)")
+            return nil
+        }
+        NSLog("[ApngNativeDecoder] decode done (self) frames=\(outPaths.count) dir=\(tmpDir.path)")
+        return outPaths
+    }
+
+    /// 系统 ImageIO 逐帧解码 → 每帧 PNG 文件（.png，与 Android 缓存格式一致）
+    private static func decodeViaImageIO(bytes: Data, frameCount: Int, tmpDir: URL) -> [String]? {
+        guard let src = CGImageSourceCreateWithData(bytes as CFData, nil) else {
+            NSLog("[ApngNativeDecoder] ImageIO: cannot create source")
+            return nil
+        }
+        let ioCount = CGImageSourceGetCount(src)
+        NSLog("[ApngNativeDecoder] ImageIO count=\(ioCount) parsed=\(frameCount)")
+        // ImageIO 若把 APNG 当静态图（count=1）则放弃，走自研兜底
+        guard ioCount == frameCount, ioCount >= 2 else {
+            return nil
+        }
+        var outPaths = [String](repeating: "", count: ioCount)
+        let lock = NSLock()
+        // CGImageSource 读取线程安全（索引随机访问），并行写 PNG
+        DispatchQueue.concurrentPerform(iterations: ioCount) { i in
+            guard let cg = CGImageSourceCreateImageAtIndex(src, i, nil) else {
+                NSLog("[ApngNativeDecoder] ImageIO: frame \(i) nil")
+                return
+            }
+            let dest = tmpDir.appendingPathComponent("frame_\(i).png") as CFURL
+            guard let dst = CGImageDestinationCreateWithURL(dest, UTType.png.identifier as CFString, 1, nil) else {
+                NSLog("[ApngNativeDecoder] ImageIO: create destination \(i) nil")
+                return
+            }
+            CGImageDestinationAddImage(dst, cg, nil)
+            if CGImageDestinationFinalize(dst) {
+                lock.lock()
+                outPaths[i] = tmpDir.appendingPathComponent("frame_\(i).png").path
+                lock.unlock()
+            } else {
+                NSLog("[ApngNativeDecoder] ImageIO: finalize frame \(i) failed")
+            }
+        }
+        if outPaths.contains("") {
+            NSLog("[ApngNativeDecoder] ImageIO: incomplete \(outPaths.filter { $0 == "" }.count)/\(outPaths.count)")
+            return nil
+        }
+        return outPaths
     }
 
     /// 只解析元数据（宽高/帧数/时长/loop）
@@ -178,22 +227,21 @@ enum ApngNativeDecoder {
         return nil
     }
 
-    // MARK: - 帧解码
+    // MARK: - 兜底：自研逐帧解码（保留旧实现，ImageIO 不可用时使用）
 
-    private static func decodeFrameToPng(_ bytes: Data, _ meta: ApngMeta, _ frame: FrameInfo) -> Data? {
+    private static func selfDecodeFrameToPng(_ bytes: Data, _ meta: ApngMeta, _ frame: FrameInfo) -> Data? {
         let w = frame.width, h = frame.height
         let channels: Int
         switch meta.colorType {
-        case 0: channels = 1 // grayscale
-        case 2: channels = 3 // rgb
-        case 3: channels = 1 // indexed
-        case 4: channels = 2 // gray+alpha
-        case 6: channels = 4 // rgba
+        case 0: channels = 1
+        case 2: channels = 3
+        case 3: channels = 1
+        case 4: channels = 2
+        case 6: channels = 4
         default: return nil
         }
         let rowBytes = w * channels
 
-        // zlib 解压（系统 Compression 框架）：拼接各 IDAT/fdAT 数据段
         var compressed = Data()
         for seg in frame.segments {
             compressed.append(bytes.subdata(in: seg.offset..<(seg.offset + seg.len)))
@@ -201,7 +249,6 @@ enum ApngNativeDecoder {
         guard let raw = inflate(compressed, minOutput: h * (rowBytes + 1)) else { return nil }
         guard raw.count >= h * (rowBytes + 1) else { return nil }
 
-        // 行滤波还原
         var pixels = [UInt8](repeating: 0, count: w * h * 4)
         var src = 0
         var prevRow = [UInt8](repeating: 0, count: rowBytes)
@@ -216,12 +263,8 @@ enum ApngNativeDecoder {
             fillPixels(meta, row, &pixels, y, w)
             prevRow = row
         }
-
-        // 直出 RGBA 裸像素（绕过 UIKit UIImage.pngData：后台并发编码非线程安全，
-            // 44 帧串行化导致 M1 21s；RGBA 字节由 Dart isolate 并行 encodePng，
-            // image 库处理标准字节序，无跨层错位）
-            return Data(pixels)
-            }
+        return Data(pixels)
+    }
 
     private static func fillPixels(_ meta: ApngMeta, _ row: [UInt8], _ pixels: inout [UInt8], _ y: Int, _ w: Int) {
         var px = y * w * 4
@@ -280,46 +323,43 @@ enum ApngNativeDecoder {
     private static func unfilter(_ filter: Int, _ row: inout [UInt8], _ prev: [UInt8], _ bpp: Int) {
         let n = row.count
         switch filter {
-        case 0: break // None
-        case 1: // Sub
+        case 0: break
+        case 1:
             for x in bpp..<n {
                 row[x] = UInt8((Int(row[x]) + Int(row[x - bpp])) & 0xFF)
             }
-        case 2: // Up
+        case 2:
             for x in 0..<n {
                 row[x] = UInt8((Int(row[x]) + Int(prev[x])) & 0xFF)
             }
-        case 3: // Average
+        case 3:
             for x in 0..<n {
                 let a = x >= bpp ? Int(row[x - bpp]) : 0
                 let b = Int(prev[x])
                 row[x] = UInt8((Int(row[x]) + ((a + b) >> 1)) & 0xFF)
             }
-        case 4: // Paeth
+        case 4:
             for x in 0..<n {
                 let a = x >= bpp ? Int(row[x - bpp]) : 0
                 let b = Int(prev[x])
                 let c = x >= bpp ? Int(prev[x - bpp]) : 0
                 let p = a + b - c
                 let pa = abs(p - a), pb = abs(p - b), pc = abs(p - c)
-                let pred: Int
-                if pa <= pb && pa <= pc { pred = a }
-                else if pb <= pc { pred = b }
-                else { pred = c }
-                row[x] = UInt8((Int(row[x]) + pred) & 0xFF)
+                let pr: Int
+                if pa <= pb && pa <= pc { pr = a }
+                else if pb <= pc { pr = b }
+                else { pr = c }
+                row[x] = UInt8((Int(row[x]) + pr) & 0xFF)
             }
-        default: break
+        default:
+            break
         }
     }
 
-    // MARK: - 工具
-
-    /// 系统 Compression zlib 解压。
-    /// 按已知输出大小分配缓冲区（PNG 行滤波后大小 = h*(rowBytes+1) 事先可算），
-    /// 写满则扩容重试——避免旧版容量不足导致静默截断、回退纯 Dart 的 21s 慢路径。
+    /// 系统 Compression zlib 解压（兜底路径）
     private static func inflate(_ data: Data, minOutput: Int) -> Data? {
         guard !data.isEmpty else { return nil }
-        let maxCap = 256 << 20 // 256MB 上限
+        let maxCap = 256 << 20
         var capacity = max(minOutput, data.count * 2)
         while capacity <= maxCap {
             var output = [UInt8](repeating: 0, count: capacity)
