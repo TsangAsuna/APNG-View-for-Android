@@ -65,6 +65,24 @@ import UniformTypeIdentifiers
               // 持久缓存目录（Library/Caches，系统仅在空间不足时清理）
               let baseDir = fm.urls(for: .cachesDirectory, in: .userDomainMask)[0]
                 .appendingPathComponent("native_frames", isDirectory: true)
+              try? fm.createDirectory(at: baseDir, withIntermediateDirectories: true)
+              // 解码日志（Filza 可直接查看：Library/Caches/native_frames/decode_log.txt）
+              func log(_ msg: String) {
+                let line = "\(Date()) \(msg)\n"
+                if let d = line.data(using: .utf8) {
+                  let logUrl = baseDir.appendingPathComponent("decode_log.txt")
+                  if fm.fileExists(atPath: logUrl.path) {
+                    if let fh = try? FileHandle(forWritingTo: logUrl) {
+                      fh.seekToEndOfFile()
+                      fh.write(d)
+                      try? fh.close()
+                    }
+                  } else {
+                    try? d.write(to: logUrl)
+                  }
+                }
+              }
+              log("=== decodeApng path=\(path) ===")
               // 缓存 key = 文件大小 + 最后修改时间（内容变则自动失效）
               let size = (try? fm.attributesOfItem(atPath: path)[.size] as? Int) ?? 0
               let mtime = (try? fm.attributesOfItem(atPath: path)[.modificationDate] as? Date)?
@@ -72,15 +90,18 @@ import UniformTypeIdentifiers
               let cacheKey = "\(size)_\(Int(mtime))"
               let tmpDir = baseDir.appendingPathComponent(cacheKey, isDirectory: true)
               try? fm.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+              log("cacheKey=\(cacheKey) exists=\(fm.fileExists(atPath: tmpDir.path))")
 
               // 缓存命中（frame_0.rgba 存在且帧数对得上）→ 直接复用，零解码秒开
               let frameCount = ApngNativeDecoder.peekMeta(path: path)?.frames.count ?? 0
               let cached = (try? fm.contentsOfDirectory(atPath: tmpDir.path))?
                 .filter { $0.hasPrefix("frame_") && $0.hasSuffix(".rgba") }
                 .sorted() ?? []
+              log("frameCount=\(frameCount) cached=\(cached.count)")
               let framePaths: [String]?
               if cached.count == frameCount && frameCount > 0 {
                 framePaths = cached.map { tmpDir.appendingPathComponent($0).path }
+                log("CACHE HIT")
               } else {
                 // 无缓存或不全 → 清残帧后完整解码到缓存目录
                 if !cached.isEmpty {
@@ -88,7 +109,9 @@ import UniformTypeIdentifiers
                     try? fm.removeItem(at: tmpDir.appendingPathComponent(f))
                   }
                 }
+                log("DECODE START")
                 framePaths = ApngNativeDecoder.decode(path: path, tmpDir: tmpDir)
+                log("DECODE END paths=\(framePaths?.count ?? -1)")
               }
               guard let framePaths = framePaths else {
                 DispatchQueue.main.async { result(nil) }

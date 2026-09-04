@@ -38,37 +38,54 @@ enum ApngNativeDecoder {
 
     /// 解码 APNG 文件，每帧输出 PNG 到 tmp，返回路径列表；不支持返回 nil
     static func decode(path: String, tmpDir: URL) -> [String]? {
-        guard let bytes = try? Data(contentsOf: URL(fileURLWithPath: path)) else { return nil }
-        guard let meta = parseChunks(bytes) else { return nil }
-        // 仅支持非隔行、8-bit、多帧
-        guard meta.interlace == 0, meta.bitDepth == 8, meta.frames.count >= 2 else { return nil }
-        // 仅支持全尺寸 source-blend 帧（最常见）；否则回退 Dart 完整合成
-        for f in meta.frames {
-            if f.xOffset != 0 || f.yOffset != 0 ||
-                f.width != meta.width || f.height != meta.height ||
-                f.blendOp != 0 {
-                return nil
-            }
+      guard let bytes = try? Data(contentsOf: URL(fileURLWithPath: path)) else {
+        NSLog("[ApngNativeDecoder] FAIL: cannot read file")
+        return nil
+      }
+      guard let meta = parseChunks(bytes) else {
+        NSLog("[ApngNativeDecoder] FAIL: parseChunks nil")
+        return nil
+      }
+      // 仅支持非隔行、8-bit、多帧
+      guard meta.interlace == 0, meta.bitDepth == 8, meta.frames.count >= 2 else {
+        NSLog("[ApngNativeDecoder] FAIL: interlace=\(meta.interlace) bitDepth=\(meta.bitDepth) frames=\(meta.frames.count)")
+        return nil
+      }
+      // 仅支持全尺寸 source-blend 帧（最常见）；否则回退 Dart 完整合成
+      for f in meta.frames {
+        if f.xOffset != 0 || f.yOffset != 0 ||
+          f.width != meta.width || f.height != meta.height ||
+          f.blendOp != 0 {
+          NSLog("[ApngNativeDecoder] FAIL: complex frame x=\(f.xOffset) y=\(f.yOffset) w=\(f.width) h=\(f.height) blend=\(f.blendOp) canvas=\(meta.width)x\(meta.height)")
+          return nil
         }
+      }
+      NSLog("[ApngNativeDecoder] decode start frames=\(meta.frames.count) size=\(meta.width)x\(meta.height)")
 
-        var outPaths = [String](repeating: "", count: meta.frames.count)
-        let lock = NSLock()
-        // 并行解码每一帧（M1/M2 等多核拉满，避免单核瓶颈）
-        DispatchQueue.concurrentPerform(iterations: meta.frames.count) { i in
-            if let rgba = decodeFrameToPng(bytes, meta, meta.frames[i]) {
-                let dest = tmpDir.appendingPathComponent("frame_\(i).rgba")
-                do {
-                    try rgba.write(to: dest)
-                    lock.lock()
-                    outPaths[i] = dest.path
-                    lock.unlock()
-                } catch {
-                    // 写失败 → 保持空串，调用方统一判失败回退 Dart
-                }
-            }
+      var outPaths = [String](repeating: "", count: meta.frames.count)
+      let lock = NSLock()
+      // 并行解码每一帧（M1/M2 等多核拉满，避免单核瓶颈）
+      DispatchQueue.concurrentPerform(iterations: meta.frames.count) { i in
+        if let rgba = decodeFrameToPng(bytes, meta, meta.frames[i]) {
+          let dest = tmpDir.appendingPathComponent("frame_\(i).rgba")
+          do {
+            try rgba.write(to: dest)
+            lock.lock()
+            outPaths[i] = dest.path
+            lock.unlock()
+          } catch {
+            NSLog("[ApngNativeDecoder] FAIL: write frame_\(i) err=\(error)")
+          }
+        } else {
+          NSLog("[ApngNativeDecoder] FAIL: decodeFrameToPng frame_\(i)")
         }
-        if outPaths.contains("") { return nil }
-        return outPaths
+      }
+      if outPaths.contains("") {
+        NSLog("[ApngNativeDecoder] FAIL: incomplete frames \(outPaths.filter { $0 == "" }.count)/\(outPaths.count)")
+        return nil
+      }
+      NSLog("[ApngNativeDecoder] decode done frames=\(outPaths.count) dir=\(tmpDir.path)")
+      return outPaths
     }
 
     /// 只解析元数据（宽高/帧数/时长/loop）
