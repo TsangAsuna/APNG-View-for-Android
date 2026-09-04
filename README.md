@@ -17,7 +17,7 @@
 
 ## 🏗️ 项目架构
 
-[![APNG 阅览器信号流架构](docs/architecture.png)](docs/architecture.html)
+[![APNG 阅览器信号流架构](docs/architecture.png)](docs/architecture.html?theme=light&present=1#view=open-flow)
 
 > 🖱️ 点击上图打开**可交互信号流架构图**：鼠标悬停/点击组件可聚焦高亮，支持缩放、搜索、四信号链视图（打开/播放/互转/保存）、明暗主题切换与路线追踪。
 

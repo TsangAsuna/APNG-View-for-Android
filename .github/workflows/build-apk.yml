@@ -8,6 +8,13 @@ on:
   push:
     branches: [main, master]
     tags: ['v*']
+    # 仅代码/配置/工作流变化才构建；README、docs 等文档改动不触发
+    paths:
+      - 'lib/**'
+      - 'android/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - '.github/workflows/build-apk.yml'
   workflow_dispatch:
 
 jobs:
