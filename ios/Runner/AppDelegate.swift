@@ -360,7 +360,7 @@ import UniformTypeIdentifiers
 }
 
 /// 导出到「文件」App 后的回调：清理临时文件并返回结果
-class SaveExportHandler: NSObject, UIDocumentPickerDelegate {
+class SaveExportHandler: NSObject, UIDocumentPickerDelegate, UIAdaptivePresentationControllerDelegate {
   static var assocKey = "SaveExportHandlerKey"
 
   private let fileURL: URL
