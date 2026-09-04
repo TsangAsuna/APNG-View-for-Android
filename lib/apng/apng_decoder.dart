@@ -165,19 +165,22 @@ class ApngDecoder {
 
       final results = List<ApngFrame?>.filled(frameCount, null);
       final doneCount = _ProgressCounter();
+
+      // 批量并行：每个 isolate 只 startDecode 一次，连续解码多帧。
+      // 140 帧时从 140 次全文件 chunk 扫描降到 workerCount 次，显著提速。
+      final batchWorkers = <Future<void>>[];
       for (final batch in batches) {
-        final futures = <Future<void>>[];
-        for (final idx in batch) {
-          futures.add(Future(() async {
-            final frame = await _decodeOneFrame(
-                transferable, idx, canvasW, canvasH, frameDurations[idx]);
-            results[idx] = frame;
+        batchWorkers.add(Future(() async {
+          final frames = await _decodeFrameBatch(
+            transferable, batch, canvasW, canvasH, frameDurations);
+          for (var k = 0; k < batch.length; k++) {
+            results[batch[k]] = frames[k];
             final done = doneCount.add();
             onProgress?.call(done, frameCount);
-          }));
-        }
-        await Future.wait(futures);
+          }
+        }));
       }
+      await Future.wait(batchWorkers);
 
       // 收集（保持原始帧序）；任一帧失败则整体回退串行解码，
       // 保证任何 APNG 都能显示而不是返回 null
@@ -217,42 +220,71 @@ class ApngDecoder {
     return n < 4 ? n : 4;
   }
 
-  /// 在后台 isolate 中解码第 [idx] 帧并压缩为 PNG（快速路径帧）
-  static Future<ApngFrame?> _decodeOneFrame(
-      TransferableTypedData bytes, int idx, int w, int h, int durationMs) async {
-    return await compute(_frameWorker, <Object>[bytes, idx, w, h, durationMs]);
+  /// 在后台 isolate 中批量解码多帧并压缩为 PNG。
+  /// 关键优化：每个 isolate 只 startDecode 一次（扫描一次文件 chunk 头），
+  /// 连续解码整批帧——140 帧时从 140 次全文件扫描降到 workerCount 次。
+  static Future<List<ApngFrame?>> _decodeFrameBatch(
+      TransferableTypedData bytes,
+      List<int> indices,
+      int w,
+      int h,
+      List<int> durations) async {
+    return await compute(
+        _frameBatchWorker, <Object>[bytes, indices, w, h, durations]);
   }
 
-  /// isolate worker：独立 decoder 解码单帧 + level1 压缩
-  static ApngFrame? _frameWorker(List<Object> args) {
+  /// isolate worker：单次 startDecode + 批量 decodeFrame + level1 压缩
+  static List<ApngFrame?> _frameBatchWorker(List<Object> args) {
     try {
       final data = args[0] as TransferableTypedData;
       final bytes = data.materialize().asUint8List();
-      final idx = args[1] as int;
+      final indices = (args[1] as List).cast<int>();
       final w = args[2] as int;
       final h = args[3] as int;
-      final durationMs = args[4] as int;
+      final durations = (args[4] as List).cast<int>();
+
       final decoder = img.PngDecoder();
       final info = decoder.startDecode(bytes);
-      if (info == null) return null;
-      // 防御：帧索引越界（无 fcTL 第一帧等情况）直接失败，
-      // 由上层整体回退串行解码
+      if (info == null) return List.filled(indices.length, null);
       final pngInfo = info as img.PngInfo;
-      if (idx < 0 || idx >= pngInfo.frames.length) return null;
-      final image = decoder.decodeFrame(idx);
-      if (image == null) return null;
-      final rgba = image.numChannels != 4
-          ? image.convert(numChannels: 4)
-          : image;
-      final png = img.PngEncoder(level: 1).encode(rgba);
-      return ApngFrame(
-        pngBytes: png,
-        width: w,
-        height: h,
-        durationMs: durationMs,
-      );
+      if (pngInfo.frames.length != indices.length &&
+          pngInfo.numFrames != indices.length) {
+        // 帧数不一致（无 fcTL 第一帧等情况）：让上层回退串行解码
+        if (pngInfo.frames.length < indices.length) {
+          return List.filled(indices.length, null);
+        }
+      }
+
+      final encoder = img.PngEncoder(level: 1);
+      final out = <ApngFrame?>[];
+      for (final idx in indices) {
+        try {
+          if (idx < 0 || idx >= pngInfo.frames.length) {
+            out.add(null);
+            continue;
+          }
+          final image = decoder.decodeFrame(idx);
+          if (image == null) {
+            out.add(null);
+            continue;
+          }
+          final rgba = image.numChannels != 4
+              ? image.convert(numChannels: 4)
+              : image;
+          final png = encoder.encode(rgba);
+          out.add(ApngFrame(
+            pngBytes: png,
+            width: w,
+            height: h,
+            durationMs: idx < durations.length ? durations[idx] : 100,
+          ));
+        } catch (_) {
+          out.add(null);
+        }
+      }
+      return out;
     } catch (e) {
-      return null;
+      return List.filled((args[1] as List).length, null);
     }
   }
 }
