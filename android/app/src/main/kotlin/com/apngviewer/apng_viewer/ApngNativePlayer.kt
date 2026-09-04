@@ -68,16 +68,14 @@ class ApngNativePlayer(
                         return@execute
                     }
                 }
-                // 系统 ImageDecoder 逐帧解码（API 28+，C++ 实现，对齐 ImageToolbox）
-                val bitmaps = if (android.os.Build.VERSION.SDK_INT >= 28) {
-                    decodeWithImageDecoder(path, meta)
-                } else {
-                    decodeWithSelf(path, meta)
-                }
-                if (bitmaps == null || bitmaps.size != frameCount) {
-                    mainHandler.post { result.success(null) }
-                    return@execute
-                }
+                // 逐帧解码（自研解码器：系统 ImageDecoder 无逐帧 API，
+                    // API 28+ 也仅解静态图；自研 + 原生侧字节序转换与 ImageToolbox 的
+                    // oupson 库同思路）
+                    val bitmaps = decodeWithSelf(path, meta)
+                    if (bitmaps == null || bitmaps.size != frameCount) {
+                        mainHandler.post { result.success(null) }
+                        return@execute
+                    }
                 frames = bitmaps
                 durations = meta.frames.map { f ->
                     val d = if (f.delayNum > 0 && f.delayDen > 0)
@@ -113,48 +111,7 @@ class ApngNativePlayer(
         }
     }
 
-    /** API 28+：系统 ImageDecoder 逐帧解码（对齐 ImageToolbox/coil） */
-    @android.annotation.SuppressLint("WrongConstant")
-    private fun decodeWithImageDecoder(
-        path: String,
-        meta: ApngNativeDecoder.ApngMeta,
-    ): List<Bitmap>? = try {
-        val src = android.graphics.ImageDecoder.createSource(File(path))
-        val decoder = android.graphics.ImageDecoder.createDecoder(src)
-        // 逐帧解码：对 APNG 文件, 每次 decodeBitmap 得到第 N 帧需要 seek
-        // 这里用标准做法: 通过 ImageDecoder 的 OnHeaderDecoded 拿帧数,
-        // 然后逐帧 decode(seekToFrame 由系统处理)
-        val list = ArrayList<Bitmap>(meta.frames.size)
-        for (i in 0 until meta.frames.size) {
-            val bmp = decodeFrameAt(path, i, meta)
-            if (bmp == null) return null
-            list.add(bmp)
-        }
-        list
-    } catch (e: Exception) {
-        null
-    }
-
-    private fun decodeFrameAt(path: String, index: Int, meta: ApngNativeDecoder.ApngMeta): Bitmap? {
-        // ImageDecoder 无公开逐帧 API；用自研解码器逐帧（与 ImageToolbox 的
-        // oupson 库同思路：自研解析 + 系统 Bitmap）。这里直接复用 ApngNativeDecoder
-        // 的帧级能力——它输出 RGBA 字节, 转成 Bitmap 一次即可（在原生侧,
-        // 不跨层, 无字节序问题）。
-        return try {
-            val bytes = File(path).readBytes()
-            val frame = meta.frames[index]
-            val rgba = ApngNativeDecoder.decodeFrameRgba(bytes, meta, frame) ?: return null
-            val bmp = Bitmap.createBitmap(frame.width, frame.height, Bitmap.Config.ARGB_8888)
-            // RGBA -> ARGB_8888（原生侧字节序转换, 不出 JVM/Flutter 边界）
-            val buf = java.nio.ByteBuffer.wrap(rgba).order(java.nio.ByteOrder.nativeOrder())
-            bmp.copyPixelsFromBuffer(buf)
-            bmp
-        } catch (e: Exception) {
-            null
-        }
-    }
-
-    /** API 24-27：自研解码器逐帧（无系统 APNG 支持） */
+    /** 自研解码器逐帧（系统 ImageDecoder 无逐帧 API，API 24+ 全覆盖） */
     private fun decodeWithSelf(
         path: String,
         meta: ApngNativeDecoder.ApngMeta,
@@ -205,7 +162,7 @@ class ApngNativePlayer(
             } catch (_: Exception) {
             }
         }
-        textureEntry?.texture()?.let { it.markDirty() }
+        textureEntry?.markDirty()
     }
 
     fun play() {
