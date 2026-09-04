@@ -182,7 +182,7 @@ enum ApngNativeDecoder {
         for seg in frame.segments {
             compressed.append(bytes.subdata(in: seg.offset..<(seg.offset + seg.len)))
         }
-        guard let raw = inflate(compressed) else { return nil }
+        guard let raw = inflate(compressed, minOutput: h * (rowBytes + 1)) else { return nil }
         guard raw.count >= h * (rowBytes + 1) else { return nil }
 
         // 行滤波还原
@@ -315,29 +315,33 @@ enum ApngNativeDecoder {
         return UIImage(cgImage: cgImage)
     }
 
-    /// 系统 Compression zlib 解压
-    private static func inflate(_ data: Data) -> Data? {
+    /// 系统 Compression zlib 解压。
+    /// 按已知输出大小分配缓冲区（PNG 行滤波后大小 = h*(rowBytes+1) 事先可算），
+    /// 写满则扩容重试——避免旧版容量不足导致静默截断、回退纯 Dart 的 21s 慢路径。
+    private static func inflate(_ data: Data, minOutput: Int) -> Data? {
         guard !data.isEmpty else { return nil }
-        var result = Data()
-        // 预估输出：zlib 解压最大约 100x 输入，设 256MB 上限
-        let capacity = max(data.count * 8, 1 << 20)
-        var output = [UInt8](repeating: 0, count: min(capacity, 256 << 20))
-        let outputCount = output.count
-        let written = output.withUnsafeMutableBytes { dst in
-            data.withUnsafeBytes { src in
-                compression_decode_buffer(
-                    dst.bindMemory(to: UInt8.self).baseAddress!,
-                    outputCount,
-                    src.bindMemory(to: UInt8.self).baseAddress!,
-                    data.count,
-                    nil,
-                    COMPRESSION_ZLIB)
+        let maxCap = 256 << 20 // 256MB 上限
+        var capacity = max(minOutput, data.count * 2)
+        while capacity <= maxCap {
+            var output = [UInt8](repeating: 0, count: capacity)
+            let outputCount = output.count
+            let written = output.withUnsafeMutableBytes { dst in
+                data.withUnsafeBytes { src in
+                    compression_decode_buffer(
+                        dst.bindMemory(to: UInt8.self).baseAddress!,
+                        outputCount,
+                        src.bindMemory(to: UInt8.self).baseAddress!,
+                        data.count,
+                        nil,
+                        COMPRESSION_ZLIB)
+                }
             }
+            if written >= minOutput {
+                return Data(output[0..<written])
+            }
+            capacity *= 2
         }
-        if written > 0 {
-            result.append(contentsOf: output[0..<written])
-        }
-        return result.isEmpty ? nil : result
+        return nil
     }
 
     private static func readInt(_ b: Data, _ off: Int) -> Int {

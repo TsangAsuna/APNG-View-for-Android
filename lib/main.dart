@@ -333,7 +333,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14)),
                   ),
-                  icon: const Icon(Icons.folder_open, size: 24),
+                  icon: const Icon(Icons.folder_open, size: 24, color: Color(0xFF0288D1)),
                   label: const Text('阅览图片',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -353,7 +353,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14)),
                   ),
-                  icon: const Icon(Icons.folder_special, size: 24),
+                  icon: const Icon(Icons.folder_special, size: 24, color: Color(0xFF0288D1)),
                   label: const Text('文件打开',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -378,7 +378,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14)),
                   ),
-                  icon: const Icon(Icons.swap_horiz, size: 24),
+                  icon: const Icon(Icons.swap_horiz, size: 24, color: Color(0xFF0288D1)),
                   label: const Text('图片互转',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
