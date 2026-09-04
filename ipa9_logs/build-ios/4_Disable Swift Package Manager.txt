@@ -1,0 +1,10 @@
+﻿2026-09-04T00:51:00.8051380Z ##[group]Run flutter config --no-enable-swift-package-manager
+2026-09-04T00:51:00.8056110Z [36;1mflutter config --no-enable-swift-package-manager[0m
+2026-09-04T00:51:00.8111610Z shell: /bin/bash -e {0}
+2026-09-04T00:51:00.8111920Z env:
+2026-09-04T00:51:00.8112800Z   FLUTTER_ROOT: /Users/runner/hostedtoolcache/flutter/stable-3.47.2-arm64/flutter
+2026-09-04T00:51:00.8113820Z   PUB_CACHE: /Users/runner/.pub-cache
+2026-09-04T00:51:00.8114200Z ##[endgroup]
+2026-09-04T00:51:02.0589750Z Setting "enable-swift-package-manager" value to "false".
+2026-09-04T00:51:02.0591610Z 
+2026-09-04T00:51:02.0592690Z You may need to restart any open editors for them to read new settings.

@@ -120,11 +120,8 @@ class CustomPhotoPickerViewController: UIViewController,
     thumbnailSize = CGSize(width: side, height: side)
     // 预取前两屏（3 列 × 18 行 = 54 个）
     imageManager.allowsCachingHighQualityImages = false
-    let firstBatch = min(assets?.count ?? 0, Int(columns) * 18)
-    if firstBatch > 0 {
-      let idxs = (0..<firstBatch).map { IndexPath(item: $0, section: 0) }
-      collectionView.prefetchItems(at: idxs)
-    }
+    // 注：不手动调用 prefetchItems(at:)（私有 API，编译失败），
+    // 滚动预取由系统自动回调 collectionView(_:prefetchItemsAt:) 完成。
     collectionView.reloadData()
   }
 
