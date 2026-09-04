@@ -68,7 +68,7 @@ class _ViewerPageState extends State<ViewerPage> {
         fileName: name,
         mime: 'image/png',
         data: frame.pngBytes,
-      ).timeout(const Duration(seconds: 8), onTimeout: () => false);
+      ).timeout(const Duration(seconds: 2), onTimeout: () => false);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(ok ? '已保存第 ${_player!.currentFrame + 1} 帧' : '保存已取消')),
@@ -94,7 +94,7 @@ class _ViewerPageState extends State<ViewerPage> {
         mime: 'image/apng',
         data: bytes,
         keepOriginal: true,
-      ).timeout(const Duration(seconds: 8), onTimeout: () => false);
+      ).timeout(const Duration(seconds: 2), onTimeout: () => false);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(ok ? '已保存原文件' : '保存已取消')),

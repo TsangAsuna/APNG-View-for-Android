@@ -278,6 +278,10 @@ import UniformTypeIdentifiers
       objc_setAssociatedObject(picker, &SaveExportHandler.assocKey, handler, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
       picker.delegate = handler
       topVC.present(picker, animated: true)
+      // 兜底：iOS 15 取消/回调丢失时 10s 后强制完成（与 Dart 2s 超时双保险）
+      DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+        handler.forceCompleteIfPending()
+      }
     }
   }
 
@@ -362,20 +366,35 @@ class SaveExportHandler: NSObject, UIDocumentPickerDelegate {
 
   private let fileURL: URL
   private let completion: (Bool) -> Void
+  private var done = false
 
   init(fileURL: URL, completion: @escaping (Bool) -> Void) {
     self.fileURL = fileURL
     self.completion = completion
   }
 
-  func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+  /// iOS 15 取消回调偶发丢失的兜底：picker 展示后超时强制完成，
+  /// 保证 MethodChannel result 必达，Dart 侧 finally 必复位按钮。
+  func forceCompleteIfPending() {
+    guard !done else { return }
+    done = true
     try? FileManager.default.removeItem(at: fileURL)
-    completion(true)
+    completion(false)
+  }
+
+  private func finish(_ ok: Bool) {
+    guard !done else { return }
+    done = true
+    try? FileManager.default.removeItem(at: fileURL)
+    completion(ok)
+  }
+
+  func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+    finish(true)
   }
 
   func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
-    try? FileManager.default.removeItem(at: fileURL)
-    completion(false)
+    finish(false)
   }
 }
 

@@ -186,7 +186,7 @@ class _ConvertPageState extends State<ConvertPage>
     if (_srcImages.isEmpty) return;
     setState(() => _converting = true);
     // 让编码转圈先渲染出来，避免同步编码时界面无反馈
-    await Future.delayed(const Duration(milliseconds: 30));
+    await Future.delayed(const Duration(milliseconds: 2));
     final apng = await compute(_encodeApngWorker, <Object>[
       _srcImages.map((e) => e.rgbaBytes).toList(),
       _srcImages.first.width,
@@ -340,7 +340,7 @@ class _ConvertPageState extends State<ConvertPage>
         fileName: name,
         mime: 'image/apng',
         data: data,
-      ).timeout(const Duration(seconds: 30), onTimeout: () => false);
+      ).timeout(const Duration(seconds: 2), onTimeout: () => false);
       if (!mounted) return;
       if (ok) _snack('APNG 已导出: $name');
     } catch (e) {
@@ -373,7 +373,7 @@ class _ConvertPageState extends State<ConvertPage>
             mime: 'image/png',
             data: result.frames[i].pngBytes,
             useCustomDir: true,
-          ).timeout(const Duration(seconds: 30), onTimeout: () => false);
+          ).timeout(const Duration(seconds: 2), onTimeout: () => false);
           if (ok) count++;
         }
         if (!mounted) return;
@@ -414,7 +414,7 @@ class _ConvertPageState extends State<ConvertPage>
             fileName: '${_baseName()}_frame_${i + 1}.png',
             mime: 'image/png',
             data: result.frames[i].pngBytes,
-          ).timeout(const Duration(seconds: 30), onTimeout: () => false);
+          ).timeout(const Duration(seconds: 2), onTimeout: () => false);
           if (ok) count++;
         }
         if (!mounted) return;
