@@ -26,7 +26,7 @@
     { "id": "player", "type": "backend", "label": "ApngPlayer", "sublabel": "Ticker 帧调度", "pos": [420, 250], "size": [130, 60] },
     { "id": "encoder", "type": "backend", "label": "ApngEncoder", "sublabel": "多帧 → APNG", "pos": [420, 420], "size": [130, 60] },
     { "id": "native", "type": "security", "label": "原生桥", "sublabel": "解码器 / 选择器", "pos": [640, 250], "size": [130, 60] },
-    { "id": "save", "type": "security", "label": "系统保存", "sublabel": "对话框 / 文稿", "pos": [640, 420], "size": [130, 60] },
+    { "id": "save", "type": "security", "label": "系统保存", "sublabel": "对话框 / 文稿 / 相册", "pos": [640, 420], "size": [130, 60] },
     { "id": "frames", "type": "database", "label": "帧文件缓存", "sublabel": "native_frames", "pos": [850, 250], "size": [140, 60] }
   ],
   "connections": [
@@ -44,6 +44,6 @@
   "cards": [
     { "dot": "cyan", "title": "打开信号链", "items": ["原生多核解码优先（Android 线程池 / iOS ImageIO）", "帧文件缓存 size_mtime 命中 → 秒开", "Dart image 库 isolate 并行回退"] },
     { "dot": "emerald", "title": "播放信号链", "items": ["ApngPlayer Ticker 驱动帧调度", "Image.memory 引擎解码，双端字节序安全", "进度条 / 倍速 / 逐帧精确控制"] },
-    { "dot": "rose", "title": "保存护栏", "items": ["取消保存弹窗 → 30s 超时兜底复位", "Dart 侧 try/finally 必复位", "导出路径全部安全复位"] }
+    { "dot": "rose", "title": "保存护栏", "items": ["保存方式三选：对话框 / 默认文件夹 / 相册", "取消/手势下滑 → 原生回调必达 + 立即复位", "双端免弹窗：MediaStore / PhotoKit / 文稿"] }
   ]
 }
