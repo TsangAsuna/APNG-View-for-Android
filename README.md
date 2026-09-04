@@ -26,9 +26,18 @@
 
 ## 项目架构
 
-[![APNG 阅览器信号流架构](docs/architecture.png)](docs/architecture.html?theme=light&present=1#view=open-flow)
+[![APNG 阅览器信号流架构](docs/architecture.png)](docs/architecture.html?theme=light#view=reset)
 
-> 点击上图打开**可交互信号流架构图**：鼠标悬停/点击组件可聚焦高亮，支持缩放、搜索、四信号链视图（打开/播放/互转/保存）、明暗主题切换与路线追踪。
+> 点击上图打开**可交互信号流架构图**：鼠标悬停/点击组件可聚焦高亮，支持缩放、搜索、明暗主题切换与路线追踪。
+
+### 四条信号链
+
+| 过程 | 架构图 | 说明 |
+|------|------|------|
+| 打开 APNG | [![打开信号链](docs/architecture-flow-open.png)](docs/architecture.html?theme=light&present=1#view=open-flow) | 选文件 → 原生多核解码 → 帧文件缓存 → Dart 读回渲染 |
+| 逐帧播放 | [![播放信号链](docs/architecture-flow-play.png)](docs/architecture.html?theme=light&present=1#view=play-flow) | Ticker 驱动帧调度，Image.memory 引擎解码显示 |
+| 图片互转 | [![互转信号链](docs/architecture-flow-convert.png)](docs/architecture.html?theme=light&present=1#view=convert-flow) | 多图 RGBA → APNG 编码；APNG → 逐帧 PNG 导出 |
+| 保存导出 | [![保存信号链](docs/architecture-flow-save.png)](docs/architecture.html?theme=light&present=1#view=save-flow) | 保存当前帧 / 原文件 / 帧序列，系统对话框或自定义目录 |
 
 | 层 | 模块 | 实现 | 说明 |
 |------|------|------|------|
