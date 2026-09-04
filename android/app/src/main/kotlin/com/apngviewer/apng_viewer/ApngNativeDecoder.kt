@@ -18,7 +18,9 @@ import java.util.zip.Inflater
  */
 object ApngNativeDecoder {
 
-    private const val SIG = 0x89504E470D0A1A0AL
+    // PNG 文件签名（避免 Long 溢出：0x89504E470D0A1A0A 最高位为 1）
+    private val PNG_SIG = byteArrayOf(
+        0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
 
     data class FrameInfo(
         val width: Int, val height: Int,
@@ -83,9 +85,7 @@ object ApngNativeDecoder {
     /** 解析 PNG chunk，收集帧元数据。 */
     private fun parseChunks(bytes: ByteArray): ApngMeta? {
         if (bytes.size < 8) return null
-        var sig = 0L
-        for (i in 0 until 8) sig = (sig shl 8) or (bytes[i].toLong() and 0xFF)
-        if (sig != SIG) return null
+        if (!bytes.copyOfRange(0, 8).contentEquals(PNG_SIG)) return null
 
         var off = 8
         var width = 0; var height = 0
@@ -171,7 +171,7 @@ object ApngNativeDecoder {
         }
 
         if (width <= 0 || height <= 0) return null
-        if (frames.isEmpty && numFrames <= 1) {
+        if (frames.isEmpty() && numFrames <= 1) {
             // 静态 PNG：单帧（IDAT 数据）也记录，便于统一处理
             if (frameDataOff >= 0) {
                 frames.add(FrameInfo(width, height, 0, 0, 0, 0, 0, 0,
