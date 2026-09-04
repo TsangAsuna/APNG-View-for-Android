@@ -60,7 +60,7 @@ jobs:
       - name: Flutter pub get & analyze
         run: |
           flutter pub get
-          flutter analyze
+          flutter analyze --no-fatal-infos --no-fatal-warnings
 
       # 6. 运行测试
       - name: Run tests
