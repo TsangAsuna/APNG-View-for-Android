@@ -1,5 +1,4 @@
 import Foundation
-import UIKit
 import Compression
 
 /// 轻量原生 APNG 解码器（自研，不依赖 ImageIO）。
@@ -56,10 +55,10 @@ enum ApngNativeDecoder {
         let lock = NSLock()
         // 并行解码每一帧（M1/M2 等多核拉满，避免单核瓶颈）
         DispatchQueue.concurrentPerform(iterations: meta.frames.count) { i in
-            if let png = decodeFrameToPng(bytes, meta, meta.frames[i]) {
-                let dest = tmpDir.appendingPathComponent("frame_\(i).png")
+            if let rgba = decodeFrameToPng(bytes, meta, meta.frames[i]) {
+                let dest = tmpDir.appendingPathComponent("frame_\(i).rgba")
                 do {
-                    try png.write(to: dest)
+                    try rgba.write(to: dest)
                     lock.lock()
                     outPaths[i] = dest.path
                     lock.unlock()
@@ -201,10 +200,11 @@ enum ApngNativeDecoder {
             prevRow = row
         }
 
-        // 编码 PNG（用 UIImage 系统编码器，保持与原实现一致的高质量输出）
-        guard let image = bitmapFrom(pixels, w, h), let png = image.pngData() else { return nil }
-        return png
-    }
+        // 直出 RGBA 裸像素（绕过 UIKit UIImage.pngData：后台并发编码非线程安全，
+            // 44 帧串行化导致 M1 21s；RGBA 字节由 Dart isolate 并行 encodePng，
+            // image 库处理标准字节序，无跨层错位）
+            return Data(pixels)
+            }
 
     private static func fillPixels(_ meta: ApngMeta, _ row: [UInt8], _ pixels: inout [UInt8], _ y: Int, _ w: Int) {
         var px = y * w * 4
@@ -296,24 +296,6 @@ enum ApngNativeDecoder {
     }
 
     // MARK: - 工具
-
-    private static func bitmapFrom(_ pixels: [UInt8], _ w: Int, _ h: Int) -> UIImage? {
-        // RGBA 字节序 → CGImage
-        let bitsPerComponent = 8
-        let bitsPerPixel = 32
-        let bytesPerRow = w * 4
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
-        let bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
-        var data = pixels
-        guard let provider = CGDataProvider(data: Data(data) as CFData) else { return nil }
-        guard let cgImage = CGImage(
-            width: w, height: h, bitsPerComponent: bitsPerComponent,
-            bitsPerPixel: bitsPerPixel, bytesPerRow: bytesPerRow,
-            space: colorSpace, bitmapInfo: bitmapInfo,
-            provider: provider, decode: nil, shouldInterpolate: false,
-            intent: .defaultIntent) else { return nil }
-        return UIImage(cgImage: cgImage)
-    }
 
     /// 系统 Compression zlib 解压。
     /// 按已知输出大小分配缓冲区（PNG 行滤波后大小 = h*(rowBytes+1) 事先可算），

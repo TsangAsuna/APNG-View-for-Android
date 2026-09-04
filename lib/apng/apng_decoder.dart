@@ -124,10 +124,28 @@ class ApngDecoder {
     return _decodeAsyncDart(bytes, filePath: filePath, onProgress: onProgress);
   }
 
-  /// 调用平台原生 APNG 解码器（Android/iOS）。
-  /// 返回 Map: {paths: [帧PNG文件路径], durations: [ms], width, height, loopCount}
-  /// 原生不支持（复杂帧/格式）时返回 null → 回退纯 Dart。
-  static Future<ApngDecodeResult?> _nativeDecodeApng(String path) async {
+  /// 后台 isolate：RGBA 裸像素 → PNG 压缩字节（多核并行编码）
+/// 每帧任务独立，ReturnPort 只回传单帧结果，避免大字节跨 isolate 二次拷贝。
+Uint8List _rgbaToPngWorker(Map<String, Object> args) {
+  final rgba = args['rgba'] as Uint8List;
+  final w = args['width'] as int;
+  final h = args['height'] as int;
+  final im = img.Image.fromBytes(
+    width: w,
+    height: h,
+    bytes: rgba.buffer,
+    numChannels: 4,
+  );
+  return Uint8List.fromList(img.encodePng(im));
+}
+
+/// 调用平台原生 APNG 解码器（Android/iOS）。
+/// 返回 Map: {paths: [帧文件路径], durations: [ms], width, height, loopCount}
+/// 原生不支持（复杂帧/格式）时返回 null → 回退纯 Dart。
+///
+/// iOS 原生直出 `.rgba` 裸像素（跳过 UIKit UIImage.pngData 串行瓶颈），
+/// 这里并行 encodePng 转回 PNG 字节供引擎渲染——解码快(原生) + 编码快(多核)。
+static Future<ApngDecodeResult?> _nativeDecodeApng(String path) async {
     final channel = MethodChannel('com.apngviewer.apng_viewer/native_decode');
     final result = await channel.invokeMapMethod<String, dynamic>(
         'decodeApng', {'path': path});
@@ -135,21 +153,47 @@ class ApngDecoder {
     final paths = (result['paths'] as List).cast<String>();
     final durations = (result['durations'] as List).cast<int>();
     if (paths.isEmpty) return null;
+    final width = (result['width'] as num?)?.toInt() ?? 0;
+    final height = (result['height'] as num?)?.toInt() ?? 0;
 
+    // 检测帧文件类型：iOS 原生直出 .rgba → 需并行编码回 PNG；
+    // Android 原生已输出 .png → 直接读字节
+    final isRgba = paths.first.endsWith('.rgba');
     final frames = <ApngFrame>[];
-    for (var i = 0; i < paths.length; i++) {
-      final fbytes = await File(paths[i]).readAsBytes();
-      frames.add(ApngFrame(
-        pngBytes: fbytes,
-        width: (result['width'] as num?)?.toInt() ?? 0,
-        height: (result['height'] as num?)?.toInt() ?? 0,
-        durationMs: i < durations.length ? durations[i] : 100,
-      ));
+    if (isRgba) {
+      // 多核并行 RGBA→PNG（每帧独立 isolate，M1 8 核拉满）
+      final jobs = <Future<Uint8List>>[];
+      for (var i = 0; i < paths.length; i++) {
+        final rgba = await File(paths[i]).readAsBytes();
+        jobs.add(compute(
+          _rgbaToPngWorker,
+          {'rgba': rgba, 'width': width, 'height': height},
+        ));
+      }
+      final pngs = await Future.wait(jobs);
+      for (var i = 0; i < paths.length; i++) {
+        frames.add(ApngFrame(
+          pngBytes: pngs[i],
+          width: width,
+          height: height,
+          durationMs: i < durations.length ? durations[i] : 100,
+        ));
+      }
+    } else {
+      for (var i = 0; i < paths.length; i++) {
+        final fbytes = await File(paths[i]).readAsBytes();
+        frames.add(ApngFrame(
+          pngBytes: fbytes,
+          width: width,
+          height: height,
+          durationMs: i < durations.length ? durations[i] : 100,
+        ));
+      }
     }
     return ApngDecodeResult(
       frames: frames,
-      width: (result['width'] as num?)?.toInt() ?? frames.first.width,
-      height: (result['height'] as num?)?.toInt() ?? frames.first.height,
+      width: width,
+      height: height,
       loopCount: (result['loopCount'] as num?)?.toInt() ?? 0,
       durations: durations,
     );
