@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:photo_view/photo_view.dart';
@@ -265,8 +266,14 @@ class _ViewerPageState extends State<ViewerPage> {
     if (result == null || !result.isAnimated) {
       // 第一帧已经是压缩后的 PNG 字节，直接交给引擎解码，
       // 避免在 UI 线程同步 encodePng 卡死界面（大图时尤为严重）
+      final staticFrame = result?.frames.isNotEmpty == true
+          ? result!.frames.first
+          : null;
+      if (staticFrame == null) {
+        return const Center(child: Text('无法解码静态图', style: TextStyle(color: Colors.white70)));
+      }
       return PhotoView(
-        imageProvider: MemoryImage(result.frames.first.exportPng),
+        imageProvider: MemoryImage(staticFrame.exportPng),
         backgroundDecoration: const BoxDecoration(color: Colors.black),
         minScale: PhotoViewComputedScale.contained,
         maxScale: PhotoViewComputedScale.covered * 4,

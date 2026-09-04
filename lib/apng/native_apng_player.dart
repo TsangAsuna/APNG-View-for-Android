@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -41,7 +40,8 @@ class NativeApngPlayer {
       _frameCount = (result['frameCount'] as num?)?.toInt() ?? 0;
       _durations = (result['durations'] as List?)?.cast<int>() ?? const [];
       _loopCount = (result['loopCount'] as num?)?.toInt() ?? 0;
-      return _textureId >= 0 && _frameCount > 0;
+      final tid = _textureId ?? -1;
+      return tid >= 0 && _frameCount > 0;
     } catch (_) {
       return false;
     }
@@ -56,6 +56,12 @@ class NativeApngPlayer {
   Future<void> pause() async {
     try {
       await _channel.invokeMethod('pause');
+    } catch (_) {}
+  }
+
+  Future<void> setSpeed(double speed) async {
+    try {
+      await _channel.invokeMethod('setSpeed', {'speed': speed});
     } catch (_) {}
   }
 
@@ -113,6 +119,6 @@ class NativeApngPlayer {
         ),
       );
     }
-    return Texture(textureId: _textureId!, fit: fit);
+    return Texture(textureId: _textureId!);
   }
 }

@@ -42,20 +42,6 @@ class ApngPlayer extends ChangeNotifier {
           ? result!.frames[_currentFrame]
           : null;
 
-  /// 时间进度 (0~1)，原生模式由原生 playedMs 驱动
-  double get progress {
-    final n = frameCount;
-    if (n <= 0) return 0;
-    int total;
-    if (native != null) {
-      total = native!.durations.fold(0, (a, b) => a + b);
-    } else {
-      total = result?.totalDurationMs ?? 1;
-    }
-    if (total <= 0) return 0;
-    return (_playedMs / total).clamp(0.0, 1.0);
-  }
-
   void _startNativePoll() {
     _nativePoll?.cancel();
     _nativePoll = Timer.periodic(const Duration(milliseconds: 80), (_) async {
@@ -262,8 +248,15 @@ class ApngPlayer extends ChangeNotifier {
 
   /// 时间进度（0.0 ~ 1.0），基于累计播放时间 / 总时长，帧时长不均匀也匀速
   double get progress {
-    final total = result?.totalDurationMs ?? 0;
-    if (total <= 0 || frameCount <= 1) return 0;
+    final n = frameCount;
+    if (n <= 0) return 0;
+    int total;
+    if (native != null) {
+      total = native!.durations.fold(0, (a, b) => a + b);
+    } else {
+      total = result?.totalDurationMs ?? 0;
+    }
+    if (total <= 0 || n <= 1) return 0;
     return (_playedMs % total) / total;
   }
 
