@@ -73,7 +73,7 @@ object ApngNativeDecoder {
             val outPaths = ArrayList<String>(meta.frames.size)
             for ((i, future) in futures.withIndex()) {
                 val png = future.get() ?: return null
-                val dest = File(tmpDir, "frame_${i}.png")
+                val dest = File(tmpDir, "frame_${i}.rgba")
                 FileOutputStream(dest).use { it.write(png) }
                 outPaths.add(dest.absolutePath)
             }
@@ -306,12 +306,8 @@ object ApngNativeDecoder {
             prevRow = row
         }
 
-        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-        bmp.copyPixelsFromBuffer(java.nio.ByteBuffer.wrap(pixels))
-        val out = java.io.ByteArrayOutputStream()
-        if (!bmp.compress(Bitmap.CompressFormat.PNG, 100, out)) return null
-        bmp.recycle()
-        return out.toByteArray()
+        // 直出 RGBA 裸像素（绕过 PNG 中间格式：不再 Bitmap.compress 编码）
+        return pixels
     }
 
     /** PNG 行滤波还原 */

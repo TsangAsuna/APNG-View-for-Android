@@ -65,7 +65,7 @@ class _ViewerPageState extends State<ViewerPage> {
       final ok = await FileGateway.writeExport(
         fileName: name,
         mime: 'image/png',
-        data: frame.pngBytes,
+        data: frame.exportPng,
         useCustomDir: false,
       );
       if (!mounted) return;
@@ -216,7 +216,7 @@ class _ViewerPageState extends State<ViewerPage> {
       // 第一帧已经是压缩后的 PNG 字节，直接交给引擎解码，
       // 避免在 UI 线程同步 encodePng 卡死界面（大图时尤为严重）
       return PhotoView(
-        imageProvider: MemoryImage(result.frames.first.pngBytes),
+        imageProvider: MemoryImage(result.frames.first.exportPng),
         backgroundDecoration: const BoxDecoration(color: Colors.black),
         minScale: PhotoViewComputedScale.contained,
         maxScale: PhotoViewComputedScale.covered * 4,
@@ -234,7 +234,10 @@ class _ViewerPageState extends State<ViewerPage> {
           maxScale: 8.0,
           child: Center(
             child: ApngFrameView(
+              rgbaBytes: f.rgbaBytes,
               pngBytes: f.pngBytes,
+              rgbaWidth: f.width,
+              rgbaHeight: f.height,
             ),
           ),
         );

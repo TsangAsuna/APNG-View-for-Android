@@ -349,7 +349,7 @@ class _ConvertPageState extends State<ConvertPage>
         final ok = await FileGateway.writeExport(
           fileName: '${_baseName()}_frame_${i + 1}.png',
           mime: 'image/png',
-          data: result.frames[i].pngBytes,
+          data: result.frames[i].exportPng,
           useCustomDir: true,
         );
         if (ok) count++;
@@ -385,7 +385,7 @@ class _ConvertPageState extends State<ConvertPage>
         final ok = await _writeFile(
           fileName: '${_baseName()}_frame_${i + 1}.png',
           mime: 'image/png',
-          data: result.frames[i].pngBytes,
+          data: result.frames[i].exportPng,
         );
         if (ok) count++;
       }
@@ -562,7 +562,10 @@ class _ConvertPageState extends State<ConvertPage>
               final f = p.currentFrameData;
               if (f == null) return const SizedBox.shrink();
               return ApngFrameView(
+                rgbaBytes: f.rgbaBytes,
                 pngBytes: f.pngBytes,
+                rgbaWidth: f.width,
+                rgbaHeight: f.height,
               );
             },
           ),
@@ -722,7 +725,10 @@ class _ConvertPageState extends State<ConvertPage>
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(8),
                               child: ApngFrameView(
+                                rgbaBytes: f.rgbaBytes,
                                 pngBytes: f.pngBytes,
+                                rgbaWidth: f.width,
+                                rgbaHeight: f.height,
                               ),
                             ),
                           ),
