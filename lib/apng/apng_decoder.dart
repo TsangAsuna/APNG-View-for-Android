@@ -124,22 +124,7 @@ class ApngDecoder {
     return _decodeAsyncDart(bytes, filePath: filePath, onProgress: onProgress);
   }
 
-  /// 后台 isolate：RGBA 裸像素 → PNG 压缩字节（多核并行编码）
-/// 每帧任务独立，ReturnPort 只回传单帧结果，避免大字节跨 isolate 二次拷贝。
-Uint8List _rgbaToPngWorker(Map<String, Object> args) {
-  final rgba = args['rgba'] as Uint8List;
-  final w = args['width'] as int;
-  final h = args['height'] as int;
-  final im = img.Image.fromBytes(
-    width: w,
-    height: h,
-    bytes: rgba.buffer,
-    numChannels: 4,
-  );
-  return Uint8List.fromList(img.encodePng(im));
-}
-
-/// 调用平台原生 APNG 解码器（Android/iOS）。
+  /// 调用平台原生 APNG 解码器（Android/iOS）。
 /// 返回 Map: {paths: [帧文件路径], durations: [ms], width, height, loopCount}
 /// 原生不支持（复杂帧/格式）时返回 null → 回退纯 Dart。
 ///
@@ -417,4 +402,19 @@ class ApngDecodeResult {
   /// 总时长（毫秒）
   int get totalDurationMs =>
       frames.fold<int>(0, (sum, f) => sum + f.durationMs);
+}
+
+/// 后台 isolate：RGBA 裸像素 → PNG 压缩字节（多核并行编码，顶层函数）
+/// 每帧任务独立，compute 返回单帧结果，避免大字节跨 isolate 二次拷贝。
+Uint8List _rgbaToPngWorker(Map<String, Object> args) {
+  final rgba = args['rgba'] as Uint8List;
+  final w = args['width'] as int;
+  final h = args['height'] as int;
+  final im = img.Image.fromBytes(
+    width: w,
+    height: h,
+    bytes: rgba.buffer,
+    numChannels: 4,
+  );
+  return Uint8List.fromList(img.encodePng(im));
 }
