@@ -112,5 +112,5 @@ apng_viewer/
 
 ## 致谢 / Credits
 
-- 性能基准与原生解码架构思路参考 [ImageToolbox](https://github.com/8-bit-hack/ImageToolbox)（其 Android 端可秒播 22MB/44 帧 APNG，本项目双端解码器以此为目标对齐）。本项目解码器为自研实现，未复制其源码。
+- 性能基准与原生解码架构思路参考 [ImageToolbox](https://github.com/8-bit-hack/ImageToolbox)（其 Android 端可秒播 22MB/48 帧 APNG，本项目双端解码器以此为目标对齐）。本项目解码器为自研实现，未复制其源码。
 
