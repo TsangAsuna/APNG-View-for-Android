@@ -251,6 +251,15 @@ import UniformTypeIdentifiers
       return
     }
     DispatchQueue.main.async {
+      // 观察者：picker 被关闭（含手势下滑取消、动画异常等 UIKit 未回调
+      // documentPickerWasCancelled 的场景）时兜底完成，保证 result 必达
+      let observe = NotificationCenter.default.addObserver(
+        forName: UIDocumentPickerViewController.didDismissNotification,
+        object: nil, queue: .main
+      ) { _ in
+        completion(false)
+      }
+      _ = observe
       let tmp = FileManager.default.temporaryDirectory
         .appendingPathComponent(UUID().uuidString + "_" + fileName)
       do {

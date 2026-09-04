@@ -337,7 +337,7 @@ class _ConvertPageState extends State<ConvertPage>
         fileName: name,
         mime: 'image/apng',
         data: data,
-      );
+      ).timeout(const Duration(seconds: 30), onTimeout: () => false);
       if (!mounted) return;
       if (ok) _snack('APNG 已导出: $name');
     } catch (e) {
@@ -370,7 +370,7 @@ class _ConvertPageState extends State<ConvertPage>
             mime: 'image/png',
             data: result.frames[i].pngBytes,
             useCustomDir: true,
-          );
+          ).timeout(const Duration(seconds: 30), onTimeout: () => false);
           if (ok) count++;
         }
         if (!mounted) return;
@@ -411,7 +411,7 @@ class _ConvertPageState extends State<ConvertPage>
             fileName: '${_baseName()}_frame_${i + 1}.png',
             mime: 'image/png',
             data: result.frames[i].pngBytes,
-          );
+          ).timeout(const Duration(seconds: 30), onTimeout: () => false);
           if (ok) count++;
         }
         if (!mounted) return;
