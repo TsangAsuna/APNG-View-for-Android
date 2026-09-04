@@ -128,7 +128,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               value: SaveMode.folder,
               groupValue: current,
               title: const Text('默认文件夹 APNG_Exporter'),
-              subtitle: const Text('「文件」App → 我的 iPad 可见'),
+              subtitle: Text(Platform.isAndroid
+                  ? '相册 → Pictures/APNG_Exporter'
+                  : '「文件」App → 我的 iPad 可见'),
               onChanged: (v) => Navigator.pop(c, v),
             ),
             RadioListTile<SaveMode>(

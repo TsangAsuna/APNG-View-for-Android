@@ -68,11 +68,20 @@ class MainActivity : FlutterActivity() {
                         }
                     }
                     "writeToDirectory" -> {
+                        // 默认文件夹：MediaStore 写 Pictures/APNG_Exporter（无需 SAF 授权）
                         val fileName = call.argument<String>("fileName") ?: "file.png"
                         val mime = call.argument<String>("mime") ?: "image/png"
                         val data = call.argument<ByteArray>("data") ?: byteArrayOf()
                         try {
-                            val uri = createFileInTree(mime, fileName)
+                            val values = android.content.ContentValues().apply {
+                                put(MediaStore.Images.Media.DISPLAY_NAME, fileName)
+                                put(MediaStore.Images.Media.MIME_TYPE, mime)
+                                if (android.os.Build.VERSION.SDK_INT >= 29) {
+                                    put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/APNG_Exporter")
+                                }
+                            }
+                            val uri = contentResolver.insert(
+                                MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
                             if (uri != null) {
                                 contentResolver.openOutputStream(uri)?.use { it.write(data) }
                                 result.success(true)
