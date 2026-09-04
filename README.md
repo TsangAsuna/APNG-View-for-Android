@@ -108,3 +108,9 @@ apng_viewer/
 3. 「导出 N 帧」：开启自定义目录则一次导出全部帧 PNG，否则逐个选择位置
 
 > 选择图片始终使用**源文件路径**读取（`resolveRealPath` 优先），仅在 SAF 无法解析时才回退到应用缓存临时副本，阅览本身不产生本地图片缓存。
+
+
+## 致谢 / Credits
+
+- 性能基准与原生解码架构思路参考 [ImageToolbox](https://github.com/8-bit-hack/ImageToolbox)（其 Android 端可秒播 22MB/44 帧 APNG，本项目双端解码器以此为目标对齐）。本项目解码器为自研实现，未复制其源码。
+
