@@ -333,7 +333,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14)),
                   ),
-                  icon: const Icon(Icons.folder_open),
+                  icon: const Icon(Icons.folder_open, size: 24),
                   label: const Text('阅览图片',
                       style:
                           TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
@@ -344,14 +344,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 child: FilledButton.icon(
                   onPressed: _pickAndOpenFiles,
                   style: FilledButton.styleFrom(
-                    backgroundColor: Colors.white.withValues(alpha: 0.9),
+                    backgroundColor: Colors.white,
                     foregroundColor: const Color(0xFF0288D1),
                     padding: const EdgeInsets.symmetric(
                         horizontal: 12, vertical: 14),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14)),
                   ),
-                  icon: const Icon(Icons.folder_special),
+                  icon: const Icon(Icons.folder_special, size: 24),
                   label: const Text('从文件打开',
                       style:
                           TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
@@ -367,14 +367,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     );
                   },
                   style: FilledButton.styleFrom(
-                    backgroundColor: Colors.white.withValues(alpha: 0.9),
+                    backgroundColor: Colors.white,
                     foregroundColor: const Color(0xFF0288D1),
                     padding: const EdgeInsets.symmetric(
                         horizontal: 12, vertical: 14),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14)),
                   ),
-                  icon: const Icon(Icons.swap_horiz),
+                  icon: const Icon(Icons.swap_horiz, size: 24),
                   label: const Text('图片互转',
                       style:
                           TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),

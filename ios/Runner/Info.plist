@@ -26,6 +26,11 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- 相册权限（自制图片选择器 PhotoKit 需要；若 APNG 从文件打开则不需要） -->
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>需要访问相册以选择 APNG/PNG 图片进行预览与转换</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>需要保存导出的图片到相册</string>
 	<!-- 声明应用可打开的文件类型（Filza/文件 App "Open in" 菜单识别） -->
 	<key>CFBundleDocumentTypes</key>
 	<array>

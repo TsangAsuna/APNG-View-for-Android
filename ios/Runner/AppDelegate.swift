@@ -1,6 +1,5 @@
 import Flutter
 import UIKit
-import PhotosUI
 import UniformTypeIdentifiers
 
 @main
@@ -60,7 +59,7 @@ import UniformTypeIdentifiers
     }
   }
 
-  /// 注册 iOS 原生图片选择通道（PHPicker），供 Dart 端调用
+  /// 注册 iOS 原生图片选择通道（自制 PhotoKit 选择器），供 Dart 端调用
   private func registerImagePickerChannel(_ registry: FlutterPluginRegistry) {
     guard let registrar = registry.registrar(forPlugin: "ApngImagePicker") else {
       return
@@ -118,7 +117,7 @@ import UniformTypeIdentifiers
         }
         result(self.writeToDocumentsDir(fileName: name, data: bytes))
       case "clearPendingCache":
-        // 清除 PHPicker 复制到 tmp 的图片缓存（picker_ 前缀），
+        // 清除图片选择/文件打开复制到 tmp 的缓存（picker_/shared_ 前缀），
         // 只清本应用产生的缓存，绝不触碰用户文件
         result(self.clearTmpPickerCache())
       default:
@@ -127,7 +126,7 @@ import UniformTypeIdentifiers
     }
   }
 
-  /// 删除 tmp 目录下本应用 PHPicker 复制产生的缓存图片（picker_*）
+  /// 删除 tmp 目录下本应用选择/分享产生的缓存图片（picker_*/shared_*）
   private func clearTmpPickerCache() -> Bool {
     let tmp = FileManager.default.temporaryDirectory
     guard let files = try? FileManager.default.contentsOfDirectory(
@@ -211,22 +210,18 @@ import UniformTypeIdentifiers
     }
   }
 
-  /// 弹出 iOS 原生图片选择器（PHPickerViewController）
+  /// 弹出 iOS 原生图片选择器（自制 PhotoKit 网格，取原始字节保留 APNG 动画）
   private func presentImagePicker(multiple: Bool, completion: @escaping ([String]?) -> Void) {
     guard let topVC = topViewController() else {
       completion(nil)
       return
     }
     DispatchQueue.main.async {
-      var config = PHPickerConfiguration()
-      config.selectionLimit = multiple ? 0 : 1 // 0 = 不限数量
-      config.filter = .images
-      let picker = PHPickerViewController(configuration: config)
-      let handler = ImagePickerHandler(completion: completion)
-      // 通过关联对象持有 handler，防止提前释放导致回调丢失
-      objc_setAssociatedObject(picker, &ImagePickerHandler.assocKey, handler, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
-      picker.delegate = handler
-      topVC.present(picker, animated: true)
+      let picker = CustomPhotoPickerViewController(
+        multiple: multiple, completion: completion)
+      let nav = UINavigationController(rootViewController: picker)
+      nav.modalPresentationStyle = .fullScreen
+      topVC.present(nav, animated: true)
     }
   }
 
@@ -267,133 +262,6 @@ class SaveExportHandler: NSObject, UIDocumentPickerDelegate {
   func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
     try? FileManager.default.removeItem(at: fileURL)
     completion(false)
-  }
-}
-
-/// PHPicker 回调处理：把选中的图片拷贝到临时目录，返回可读路径
-class ImagePickerHandler: NSObject, PHPickerViewControllerDelegate {
-  static var assocKey = "ImagePickerHandlerKey"
-
-  private let completion: ([String]?) -> Void
-  private var pending = 0
-  private var results: [String] = []
-  private var cancelled = false
-
-  init(completion: @escaping ([String]?) -> Void) {
-    self.completion = completion
-  }
-
-  func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
-    picker.dismiss(animated: true)
-    guard !results.isEmpty else {
-      completion(nil) // 用户取消
-      return
-    }
-
-    cancelled = false
-    pending = results.count
-    for pickerResult in results {
-      loadItem(pickerResult)
-    }
-  }
-
-  /// 从 NSItemProvider 读取图片数据并统一转为标准 PNG 写入 tmp。
-  ///
-  /// 策略（保真优先）：
-  /// 1. 优先 loadFileRepresentation 拿原始文件（若是 APNG 且相册保留原件，
-  ///    动画 chunk 不丢）；
-  /// 2. 失败/无文件表示时回退 loadDataRepresentation；
-  /// 3. 拿到字节后统一处理：PNG/APNG(魔数 89504E47) 原样保留，
-  ///    HEIC/JPEG 等其他格式用 UIImage 转码为标准 PNG。
-  private func loadItem(_ pickerResult: PHPickerResult) {
-    let provider = pickerResult.itemProvider
-    let pngType = UTType.png.identifier
-    let imageType = UTType.image.identifier
-
-    let loadData: (String) -> Void = { [weak self] typeId in
-      provider.loadDataRepresentation(forTypeIdentifier: typeId) { data, error in
-        self?.processData(data, error: error)
-      }
-    }
-
-    let loadFile: (String) -> Void = { [weak self] typeId in
-      provider.loadFileRepresentation(forTypeIdentifier: typeId) { url, error in
-        guard let url = url, error == nil else {
-          // 拿不到原始文件（如 iCloud 占位），回退数据加载
-          loadData(typeId)
-          return
-        }
-        do {
-          let data = try Data(contentsOf: url)
-          self?.processData(data, error: nil)
-        } catch {
-          loadData(typeId)
-        }
-      }
-    }
-
-    if provider.hasItemConformingToTypeIdentifier(pngType) {
-      loadFile(pngType)
-    } else if provider.hasItemConformingToTypeIdentifier(imageType) {
-      loadFile(imageType)
-    } else {
-      finishOne(nil)
-    }
-  }
-
-  /// 校验数据: PNG/APNG 原样保留, 其他格式(HEIC/JPEG)转码为标准 PNG
-  private func processData(_ data: Data?, error: Error?) {
-    guard let data = data, error == nil else {
-      finishOne(nil)
-      return
-    }
-
-    let dest = FileManager.default.temporaryDirectory
-      .appendingPathComponent("picker_\(UUID().uuidString).png")
-
-    // PNG 魔数: 89 50 4E 47 0D 0A 1A 0A
-    let isPng = data.count > 8 &&
-      data[data.startIndex] == 0x89 &&
-      data[data.startIndex + 1] == 0x50 &&
-      data[data.startIndex + 2] == 0x4E &&
-      data[data.startIndex + 3] == 0x47
-
-    if isPng {
-      // 真实 PNG/APNG: 保留原始字节(动画不丢)
-      do {
-        try data.write(to: dest)
-        finishOne(dest.path)
-      } catch {
-        finishOne(nil)
-      }
-      return
-    }
-
-    // HEIC/JPEG 等: 用系统 UIImage 转码为 PNG
-    guard let image = UIImage(data: data),
-          let pngData = image.pngData() else {
-      finishOne(nil)
-      return
-    }
-    do {
-      try pngData.write(to: dest)
-      finishOne(dest.path)
-    } catch {
-      finishOne(nil)
-    }
-  }
-
-  private func finishOne(_ path: String?) {
-    DispatchQueue.main.async { [weak self] in
-      guard let self = self else { return }
-      if let path = path {
-        self.results.append(path)
-      }
-      self.pending -= 1
-      if self.pending <= 0 {
-        self.completion(self.results.isEmpty ? nil : self.results)
-      }
-    }
   }
 }
 
