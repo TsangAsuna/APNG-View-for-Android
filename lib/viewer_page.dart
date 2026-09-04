@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:photo_view/photo_view.dart';
@@ -7,7 +6,6 @@ import 'package:photo_view/photo_view.dart';
 import 'apng/apng_decoder.dart';
 import 'apng/apng_player.dart';
 import 'apng/apng_frame_view.dart';
-import 'apng/native_apng_player.dart';
 import 'platform_file_gateway.dart';
 
 class ViewerPage extends StatefulWidget {
@@ -27,7 +25,6 @@ class ViewerPage extends StatefulWidget {
 class _ViewerPageState extends State<ViewerPage> {
   Future<ApngDecodeResult?>? _future;
   ApngPlayer? _player;
-  NativeApngPlayer? _nativePlayer;
   bool _fullscreen = false;
   double _speed = 1.0;
   bool _saving = false;
@@ -40,17 +37,7 @@ class _ViewerPageState extends State<ViewerPage> {
   }
 
   Future<ApngDecodeResult?> _load() async {
-    // 原生播放器优先（对齐 ImageToolbox：原生解码+渲染到 Texture，秒开）
-    final native = NativeApngPlayer();
-    final ok = await native.open(widget.path);
-    if (ok) {
-      _nativePlayer = native;
-      if (mounted) setState(() {});
-      return null; // 原生模式不产生 Dart 帧数据
-    }
-    await native.dispose();
-    _nativePlayer = null;
-    // 回退纯 Dart 解码（原生不支持时保证可用）
+    // 并行解码：大 APNG 多 isolate 同时解压+压缩，帧进度实时回传
     try {
       final bytes = await File(widget.path).readAsBytes();
       return await ApngDecoder.decodeAsync(
@@ -70,37 +57,20 @@ class _ViewerPageState extends State<ViewerPage> {
   /// 保存当前帧为 PNG（进度条拖到哪一帧就提取哪一帧）
   Future<void> _saveCurrentFrame() async {
     final frame = _player?.currentFrameData;
-    final native = _nativePlayer;
-    if (frame == null && native == null) return;
-    if (_saving) return;
+    if (frame == null || _saving) return;
     setState(() => _saving = true);
     try {
-      final base = widget.fileName.replaceAll(RegExp(r'\\.(apng|png)$', caseSensitive: false), '');
-      final idx = (_player?.currentFrame ?? 0);
-      final name = '${base}_frame_${idx + 1}.png';
-      Uint8List? data;
-      if (native != null) {
-        // 原生模式：从原生侧取当前帧 PNG（原生编码，无 Dart 帧数据）
-        data = await native.getCurrentFramePng();
-      } else {
-        data = frame?.exportPng;
-      }
-      if (data == null || data.isEmpty) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('当前帧不可用')),
-        );
-        return;
-      }
+      final base = widget.fileName.replaceAll(RegExp(r'\.(apng|png)$', caseSensitive: false), '');
+      final name = '${base}_frame_${_player!.currentFrame + 1}.png';
       final ok = await FileGateway.writeExport(
         fileName: name,
         mime: 'image/png',
-        data: data,
+        data: frame.pngBytes,
         useCustomDir: false,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(ok ? '已保存第 ${idx + 1} 帧' : '保存已取消')),
+        SnackBar(content: Text(ok ? '已保存第 ${_player!.currentFrame + 1} 帧' : '保存已取消')),
       );
     } catch (e) {
       if (!mounted) return;
@@ -142,8 +112,6 @@ class _ViewerPageState extends State<ViewerPage> {
   @override
   void dispose() {
     _player?.dispose();
-    _nativePlayer?.dispose();
-    _nativePlayer = null;
     super.dispose();
   }
 
@@ -193,8 +161,7 @@ class _ViewerPageState extends State<ViewerPage> {
             );
           }
           final result = snapshot.data;
-          // 原生模式：result 为 null 但 _nativePlayer 已就绪（解码渲染在原生侧）
-          if (result == null && _nativePlayer == null) {
+          if (result == null) {
             return Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -216,16 +183,8 @@ class _ViewerPageState extends State<ViewerPage> {
 
           // 确保播放器已初始化（后台解码完成后）
           if (_player == null) {
-            _player = ApngPlayer(result, native: _nativePlayer);
-            if (_nativePlayer != null) {
-              // 原生模式：帧数/时长/尺寸来自原生元数据
-              if (mounted) {
-                setState(() {
-                  _decodeStatus = '${_nativePlayer!.frameCount} 帧';
-                });
-              }
-            }
-            if (result?.isAnimated == true || _nativePlayer != null) {
+            _player = ApngPlayer(result);
+            if (result.isAnimated) {
               // 不能在 build 期间直接 play()（会触发 markNeedsBuild during build，
               // iOS 上表现为首帧渲染异常/白屏），延后到本帧绘制完成后再播放。
               WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -252,28 +211,12 @@ class _ViewerPageState extends State<ViewerPage> {
     );
   }
 
-  Widget _buildViewer(ApngDecodeResult? result) {
-    // 原生播放器模式：直接显示原生纹理（解码渲染全在原生侧）
-    if (_nativePlayer != null) {
-      return InteractiveViewer(
-        minScale: 0.5,
-        maxScale: 8.0,
-        child: Center(
-          child: _nativePlayer!.buildTexture(),
-        ),
-      );
-    }
-    if (result == null || !result.isAnimated) {
+  Widget _buildViewer(ApngDecodeResult result) {
+    if (!result.isAnimated) {
       // 第一帧已经是压缩后的 PNG 字节，直接交给引擎解码，
       // 避免在 UI 线程同步 encodePng 卡死界面（大图时尤为严重）
-      final staticFrame = result?.frames.isNotEmpty == true
-          ? result!.frames.first
-          : null;
-      if (staticFrame == null) {
-        return const Center(child: Text('无法解码静态图', style: TextStyle(color: Colors.white70)));
-      }
       return PhotoView(
-        imageProvider: MemoryImage(staticFrame.exportPng),
+        imageProvider: MemoryImage(result.frames.first.pngBytes),
         backgroundDecoration: const BoxDecoration(color: Colors.black),
         minScale: PhotoViewComputedScale.contained,
         maxScale: PhotoViewComputedScale.covered * 4,
@@ -291,11 +234,7 @@ class _ViewerPageState extends State<ViewerPage> {
           maxScale: 8.0,
           child: Center(
             child: ApngFrameView(
-              rgbaPath: f.rgbaPath,
-              rgbaLoader: f.loadRgbaBytes,
               pngBytes: f.pngBytes,
-              rgbaWidth: f.width,
-              rgbaHeight: f.height,
             ),
           ),
         );
@@ -303,15 +242,11 @@ class _ViewerPageState extends State<ViewerPage> {
     );
   }
 
-  Widget _buildControlBar(ApngDecodeResult? result) {
+  Widget _buildControlBar(ApngDecodeResult result) {
     return AnimatedBuilder(
       animation: _player!,
       builder: (context, _) {
-        final isAnimated = result?.isAnimated == true || _nativePlayer != null;
-        // 原生模式尺寸/帧数来自原生播放器
-        final dispW = _nativePlayer?.width ?? result?.width ?? 0;
-        final dispH = _nativePlayer?.height ?? result?.height ?? 0;
-        final dispFrames = _nativePlayer?.frameCount ?? result?.frames.length ?? 0;
+        final isAnimated = result.isAnimated;
         return Container(
           color: const Color(0xFF1A1A1A),
           padding: const EdgeInsets.fromLTRB(8, 6, 8, 10),
@@ -404,7 +339,7 @@ class _ViewerPageState extends State<ViewerPage> {
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     child: Text(
-                      '静态图片 · $dispW×$dispH · 双指缩放预览',
+                      '静态图片 · ${result.width}×${result.height} · 双指缩放预览',
                       style: const TextStyle(color: Colors.white70),
                     ),
                   ),
@@ -412,14 +347,14 @@ class _ViewerPageState extends State<ViewerPage> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    Text('$dispW×$dispH',
+                    Text('${result.width}×${result.height}',
                         style:
                             const TextStyle(color: Colors.white54, fontSize: 12)),
-                    Text('$dispFrames 帧',
+                    Text('${result.frames.length} 帧',
                         style:
                             const TextStyle(color: Colors.white54, fontSize: 12)),
-                    if (isAnimated)
-                      Text(_formatDuration(dispFrames),
+                    if (result.isAnimated)
+                      Text(_formatDuration(result),
                           style: const TextStyle(
                               color: Colors.white54, fontSize: 12)),
                     _fullscreen
@@ -445,16 +380,10 @@ class _ViewerPageState extends State<ViewerPage> {
     );
   }
 
-  String _formatDuration(int frameCount) {
-    int totalMs;
-    if (_nativePlayer != null) {
-      totalMs = _nativePlayer!.durations.fold(0, (a, b) => a + b);
-    } else {
-      totalMs = _player?.result?.totalDurationMs ?? 0;
-    }
-    if (totalMs <= 0) totalMs = 0;
+  String _formatDuration(ApngDecodeResult result) {
+    final totalMs = result.totalDurationMs;
     final sec = (totalMs / 1000).toStringAsFixed(1);
-    return '时长 $sec s';
+    return '时长 ${sec}s';
   }
 }
 

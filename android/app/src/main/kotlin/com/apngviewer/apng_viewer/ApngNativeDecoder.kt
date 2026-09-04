@@ -73,7 +73,7 @@ object ApngNativeDecoder {
             val outPaths = ArrayList<String>(meta.frames.size)
             for ((i, future) in futures.withIndex()) {
                 val png = future.get() ?: return null
-                val dest = File(tmpDir, "frame_${i}.rgba")
+                val dest = File(tmpDir, "frame_${i}.png")
                 FileOutputStream(dest).use { it.write(png) }
                 outPaths.add(dest.absolutePath)
             }
@@ -91,17 +91,6 @@ object ApngNativeDecoder {
      */
     fun peekMeta(path: String): ApngMeta? = try {
         parseChunks(File(path).readBytes())
-    } catch (e: Exception) {
-        null
-    }
-
-    /** 解码单帧为 RGBA 字节（原生播放器用：原生侧转 Bitmap，不跨层） */
-    fun decodeFrameRgba(
-        bytes: ByteArray,
-        meta: ApngMeta,
-        frame: FrameInfo,
-    ): ByteArray? = try {
-        decodeFrameToPng(bytes, meta, frame)
     } catch (e: Exception) {
         null
     }
@@ -317,8 +306,12 @@ object ApngNativeDecoder {
             prevRow = row
         }
 
-        // 直出 RGBA 裸像素（绕过 PNG 中间格式：不再 Bitmap.compress 编码）
-        return pixels
+        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        bmp.copyPixelsFromBuffer(java.nio.ByteBuffer.wrap(pixels))
+        val out = java.io.ByteArrayOutputStream()
+        if (!bmp.compress(Bitmap.CompressFormat.PNG, 100, out)) return null
+        bmp.recycle()
+        return out.toByteArray()
     }
 
     /** PNG 行滤波还原 */

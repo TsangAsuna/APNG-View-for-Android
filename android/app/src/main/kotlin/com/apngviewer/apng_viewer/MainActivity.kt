@@ -16,7 +16,6 @@ import java.io.FileOutputStream
 class MainActivity : FlutterActivity() {
     private val channelName = "com.apngviewer.apng_viewer/file"
     private val nativeDecodeChannel = "com.apngviewer.apng_viewer/native_decode"
-    private val nativePlayerChannel = "com.apngviewer.apng_viewer/native_player"
     private val pickSingleCode = 1001
     private val pickMultiCode = 1002
     private val pickTreeCode = 1003
@@ -27,7 +26,6 @@ class MainActivity : FlutterActivity() {
     private var pendingSaveData: ByteArray? = null
     private var pendingSaveMime: String? = null
     private var _treeUri: Uri? = null
-    private var nativePlayer: ApngNativePlayer? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -88,46 +86,6 @@ class MainActivity : FlutterActivity() {
                     result.notImplemented()
                 }
             }
-        // 原生 APNG 播放通道（对齐 ImageToolbox：原生解码+渲染到 Texture）
-        nativePlayer = ApngNativePlayer(flutterEngine, flutterEngine.renderer)
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, nativePlayerChannel)
-            .setMethodCallHandler { call, result ->
-                val p = nativePlayer
-                when (call.method) {
-                    "open" -> {
-                        val path = call.argument<String>("path")
-                        if (path == null || p == null) {
-                            result.success(null)
-                        } else {
-                            p.open(path, result)
-                        }
-                    }
-                    "play" -> { p?.play(); result.success(true) }
-                    "pause" -> { p?.pause(); result.success(true) }
-                    "seekTo" -> {
-                        val idx = call.argument<Int>("frame") ?: 0
-                        p?.seekTo(idx)
-                        result.success(true)
-                    }
-                    "nextFrame" -> { p?.nextFrame(); result.success(true) }
-                    "prevFrame" -> { p?.prevFrame(); result.success(true) }
-                    "setSpeed" -> {
-                        val s = call.argument<Double>("speed") ?: 1.0
-                        p?.setSpeed(s)
-                        result.success(true)
-                    }
-                    "getState" -> result.success(p?.getState() ?: HashMap<String, Any>())
-                    "getCurrentFramePng" -> {
-                        val b = p?.getCurrentFramePng()
-                        if (b == null) result.success(null) else result.success(b)
-                    }
-                    "dispose" -> {
-                        p?.dispose()
-                        result.success(true)
-                    }
-                    else -> result.notImplemented()
-                }
-            }
     }
 
     private fun handleNativeDecode(call: MethodCall, result: MethodChannel.Result) {
@@ -140,10 +98,10 @@ class MainActivity : FlutterActivity() {
                 // 缓存 key = 文件大小 + 最后修改时间（内容变则自动失效）
                 val cacheKey = "${src.length()}_${src.lastModified()}"
                 val tmpDir = File(cacheDir, "native_frames/$cacheKey").apply { mkdirs() }
-                // 检查缓存：已有 frame_0.rgba 且帧数对得上 → 直接复用（秒开）
+                // 检查缓存：已有 frame_0.png 且帧数对得上 → 直接复用（秒开）
                 val frameCount = ApngNativeDecoder.peekMeta(path)?.frames?.size ?: 0
                 val cached = tmpDir.listFiles()
-                    ?.filter { it.name.startsWith("frame_") && it.name.endsWith(".rgba") }
+                    ?.filter { it.name.startsWith("frame_") && it.name.endsWith(".png") }
                     ?.sortedBy { it.name }
                 val framePaths: List<String>? = if (cached != null && cached.size == frameCount && frameCount > 0) {
                     cached.map { it.absolutePath }

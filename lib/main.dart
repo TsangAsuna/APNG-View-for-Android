@@ -323,76 +323,31 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           Row(
             children: [
               Expanded(
-                child: FilledButton.icon(
-                  onPressed: _pickAndOpen,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: const Color(0xFF0288D1),
-                    elevation: 0,
-                    shadowColor: Colors.transparent,
-                    overlayColor: Colors.transparent,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 14),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
-                  ),
-                  icon: const Icon(Icons.folder_open, size: 24, color: Color(0xFF0288D1)),
-                  label: const Text('阅览图片',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style:
-                          TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                child: _HomeActionButton(
+                  icon: Icons.photo_library,
+                  label: '阅览图片',
+                  onTap: _pickAndOpen,
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: FilledButton.icon(
-                  onPressed: _pickAndOpenFiles,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: const Color(0xFF0288D1),
-                    elevation: 0,
-                    shadowColor: Colors.transparent,
-                    overlayColor: Colors.transparent,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 14),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
-                  ),
-                  icon: const Icon(Icons.folder_special, size: 24, color: Color(0xFF0288D1)),
-                  label: const Text('文件打开',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style:
-                          TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                child: _HomeActionButton(
+                  icon: Icons.folder_open,
+                  label: '文件打开',
+                  onTap: _pickAndOpenFiles,
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: FilledButton.icon(
-                  onPressed: () {
+                child: _HomeActionButton(
+                  icon: Icons.swap_horiz,
+                  label: '图片互转',
+                  onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
                           builder: (_) => const ConvertPage()),
                     );
                   },
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: const Color(0xFF0288D1),
-                    elevation: 0,
-                    shadowColor: Colors.transparent,
-                    overlayColor: Colors.transparent,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 14),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
-                  ),
-                  icon: const Icon(Icons.swap_horiz, size: 24, color: Color(0xFF0288D1)),
-                  label: const Text('图片互转',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style:
-                          TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
                 ),
               ),
             ],
@@ -475,6 +430,51 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             style: TextStyle(color: theme.hintColor),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// 主页三按钮：纯白底 + 无状态层黑边（自绘，不用 FilledButton，
+/// 彻底绕开 iOS 上 Material 状态覆盖层的黑底问题）
+class _HomeActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _HomeActionButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 24, color: const Color(0xFF0288D1)),
+              const SizedBox(height: 6),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF0288D1)),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

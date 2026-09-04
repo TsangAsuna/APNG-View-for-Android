@@ -3,21 +3,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'apng_decoder.dart';
-import 'native_apng_player.dart';
 
 /// APNG 动画播放控制器
-///
-/// 原生模式（[native] != null）：解码渲染全在原生侧（对齐 ImageToolbox），
-/// 本类轮询原生状态同步 currentFrame/playing/progress，UI 接口与纯 Dart
-/// 模式完全一致，控制栏零改动。
 class ApngPlayer extends ChangeNotifier {
   final ApngDecodeResult? result;
-  final NativeApngPlayer? native;
 
   int _currentFrame = 0;
   bool _playing = false;
   Timer? _timer;
-  Timer? _nativePoll;
   final Stopwatch _frameWatch = Stopwatch();
 
   /// 已完整播放的循环轮数（用于 loopCount 停止）
@@ -26,42 +19,16 @@ class ApngPlayer extends ChangeNotifier {
   /// 播放累计时间（毫秒），供时间进度计算
   int _playedMs = 0;
 
-  ApngPlayer(this.result, {this.native}) {
-    if (native != null) _startNativePoll();
-  }
+  ApngPlayer(this.result);
 
-  bool get isNative => native != null;
-
-  int get frameCount =>
-      native?.frameCount ?? result?.frames.length ?? 0;
+  int get frameCount => result?.frames.length ?? 0;
   int get currentFrame => _currentFrame;
   bool get playing => _playing;
-  bool get isAnimated => (result?.isAnimated ?? false) || native != null;
+  bool get isAnimated => (result?.isAnimated ?? false);
   ApngFrame? get currentFrameData =>
       (result != null && _currentFrame < result!.frames.length)
           ? result!.frames[_currentFrame]
           : null;
-
-  void _startNativePoll() {
-    _nativePoll?.cancel();
-    _nativePoll = Timer.periodic(const Duration(milliseconds: 80), (_) async {
-      final n = native;
-      if (n == null) return;
-      final st = await n.getState();
-      final f = (st['currentFrame'] as num?)?.toInt() ?? _currentFrame;
-      final p = (st['playing'] as bool?) ?? _playing;
-      final ms = (st['playedMs'] as num?)?.toInt() ?? _playedMs;
-      final loops = (st['completedLoops'] as num?)?.toInt() ?? _completedLoops;
-      if (f != _currentFrame || p != _playing || ms != _playedMs ||
-          loops != _completedLoops) {
-        _currentFrame = f;
-        _playing = p;
-        _playedMs = ms;
-        _completedLoops = loops;
-        notifyListeners();
-      }
-    });
-  }
 
   void togglePlay() {
     if (_playing) {
@@ -74,11 +41,6 @@ class ApngPlayer extends ChangeNotifier {
   void play() {
     if (!isAnimated || _playing) return;
     _playing = true;
-    if (native != null) {
-      native!.play();
-      notifyListeners();
-      return;
-    }
     _scheduleNext();
     notifyListeners();
   }
@@ -86,11 +48,6 @@ class ApngPlayer extends ChangeNotifier {
   void pause() {
     if (!_playing) return;
     _playing = false;
-    if (native != null) {
-      native!.pause();
-      notifyListeners();
-      return;
-    }
     _timer?.cancel();
     _timer = null;
     notifyListeners();
@@ -101,15 +58,10 @@ class ApngPlayer extends ChangeNotifier {
     _currentFrame = 0;
     _completedLoops = 0;
     _playedMs = 0;
-    if (native != null) native!.seekTo(0);
     notifyListeners();
   }
 
   void nextFrame() {
-    if (native != null) {
-      native!.nextFrame();
-      return;
-    }
     _timer?.cancel();
     _timer = null;
     if (frameCount > 0) {
@@ -122,10 +74,6 @@ class ApngPlayer extends ChangeNotifier {
   }
 
   void prevFrame() {
-    if (native != null) {
-      native!.prevFrame();
-      return;
-    }
     _timer?.cancel();
     _timer = null;
     if (frameCount > 0) {
@@ -139,10 +87,6 @@ class ApngPlayer extends ChangeNotifier {
 
   void gotoFrame(int index) {
     if (frameCount == 0) return;
-    if (native != null) {
-      native!.seekTo(index.clamp(0, frameCount - 1).toInt());
-      return;
-    }
     final target = index.clamp(0, frameCount - 1).toInt();
     _currentFrame = target;
     _playedMs = _elapsedUpTo(target);
@@ -158,11 +102,6 @@ class ApngPlayer extends ChangeNotifier {
 
   void setSpeed(double speed) {
     playbackSpeed = speed.clamp(0.25, 4.0);
-    if (native != null) {
-      native!.setSpeed(playbackSpeed);
-      notifyListeners();
-      return;
-    }
     if (_playing) {
       _timer?.cancel();
       _scheduleNext();
@@ -188,13 +127,6 @@ class ApngPlayer extends ChangeNotifier {
 
   int _elapsedUpTo(int index) {
     var ms = 0;
-    if (native != null) {
-      final ds = native!.durations;
-      for (var i = 0; i < index && i < ds.length; i++) {
-        ms += ds[i];
-      }
-      return ms;
-    }
     for (var i = 0; i < index && i < frameCount; i++) {
       ms += result!.frames[i].durationMs;
     }
@@ -248,15 +180,8 @@ class ApngPlayer extends ChangeNotifier {
 
   /// 时间进度（0.0 ~ 1.0），基于累计播放时间 / 总时长，帧时长不均匀也匀速
   double get progress {
-    final n = frameCount;
-    if (n <= 0) return 0;
-    int total;
-    if (native != null) {
-      total = native!.durations.fold(0, (a, b) => a + b);
-    } else {
-      total = result?.totalDurationMs ?? 0;
-    }
-    if (total <= 0 || n <= 1) return 0;
+    final total = result?.totalDurationMs ?? 0;
+    if (total <= 0 || frameCount <= 1) return 0;
     return (_playedMs % total) / total;
   }
 
@@ -269,7 +194,6 @@ class ApngPlayer extends ChangeNotifier {
   @override
   void dispose() {
     _timer?.cancel();
-    _nativePoll?.cancel();
     super.dispose();
   }
 }
