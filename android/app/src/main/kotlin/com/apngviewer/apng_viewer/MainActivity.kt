@@ -116,7 +116,7 @@ class MainActivity : FlutterActivity() {
                         p?.setSpeed(s)
                         result.success(true)
                     }
-                    "getState" -> result.success(p?.getState() ?: HashMap())
+                    "getState" -> result.success(p?.getState() ?: HashMap<String, Any>())
                     "getCurrentFramePng" -> {
                         val b = p?.getCurrentFramePng()
                         if (b == null) result.success(null) else result.success(b)

@@ -35,7 +35,7 @@ class ApngNativePlayer(
     private var currentFrame = 0
     private var playing = false
     private var completedLoops = 0
-    private var playedMs = 0
+    private var playedMs = 0L
 
     private var surface: Surface? = null
     private var textureEntry: TextureRegistry.SurfaceTextureEntry? = null
@@ -219,7 +219,7 @@ class ApngNativePlayer(
                 if (!playing) return
                 val now = ((System.currentTimeMillis() - startedAt) * speed).toLong() + frameBaseMs
                 var idx = currentFrame
-                var acc = 0
+                var acc = 0L
                 for (i in 0 until durations.size) {
                     acc += durations[i]
                     if (now < acc) {

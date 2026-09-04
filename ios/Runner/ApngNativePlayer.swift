@@ -22,7 +22,7 @@ class ApngNativePlayer: NSObject, FlutterTexture {
     private var currentFrame = 0
     private var playing = false
     private var completedLoops = 0
-    private var playedMs = 0
+    private var playedMs: Int64 = 0
 
     private var displayLink: CADisplayLink?
     private var startedAt: CFTimeInterval = 0
@@ -152,9 +152,9 @@ class ApngNativePlayer: NSObject, FlutterTexture {
         guard playing, !frames.isEmpty else { lock.unlock(); return }
         let now = playedMs + Int64((CACurrentMediaTime() - startedAt) * 1000 * speed)
         var idx = currentFrame
-        var acc = 0
+        var acc: Int64 = 0
         for (i, d) in durations.enumerated() {
-            acc += d
+            acc += Int64(d)
             if now < acc { idx = i; break }
             idx = i
         }
